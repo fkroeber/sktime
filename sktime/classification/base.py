@@ -31,6 +31,7 @@ from sktime.datatypes import VectorizedDF, check_is_scitype
 from sktime.utils.dependencies import _check_estimator_deps
 from sktime.utils.sklearn import is_sklearn_transformer
 from sktime.utils.validation import check_n_jobs
+from sktime.utils.warnings import warn
 
 
 class BaseClassifier(BasePanelMixin):
@@ -165,7 +166,7 @@ class BaseClassifier(BasePanelMixin):
         else:
             return NotImplemented
 
-    def fit(self, X, y):
+    def fit(self, X, y, X_val=None, y_val=None):
         """
         Fit time series classifier to training data.
 
@@ -178,7 +179,7 @@ class BaseClassifier(BasePanelMixin):
 
         Parameters
         ----------
-        X : sktime compatible time series panel data container of Panel scitype
+        X : input data: sktime compatible time series panel data container of Panel scitype
             time series to fit the estimator to.
 
             Can be in any :term:`mtype` of ``Panel`` :term:`scitype`, for instance:
@@ -197,9 +198,37 @@ class BaseClassifier(BasePanelMixin):
             Not all estimators support panels with multivariate or unequal length
             series, see the :ref:`tag reference <panel_tags>` for details.
 
-        y : sktime compatible tabular data container, Table scitype
+        y : target data: sktime compatible tabular data container, Table scitype
             1D iterable, of shape [n_instances]
             or 2D iterable, of shape [n_instances, n_dimensions]
+            class labels for fitting
+            0-th indices correspond to instance indices in X
+            1-st indices (if applicable) correspond to multioutput vector indices in X
+            supported sktime types: np.ndarray (1D, 2D), pd.Series, pd.DataFrame
+
+        X_val : validation data to evaluate the loss and metrics at the end of each epoch:
+            sktime compatible time series panel data container of Panel scitype time series
+            to validate the estimator on.
+
+            Can be in any :term:`mtype` of ``Panel`` :term:`scitype`, for instance:
+
+            * pd-multiindex: pd.DataFrame with columns = variables,
+              index = pd.MultiIndex with first level = instance indices,
+              second level = time indices
+            * numpy3D: 3D np.array (any number of dimensions, equal length series)
+              of shape [n_instances, n_dimensions, series_length]
+            * or of any other supported ``Panel`` :term:`mtype`
+
+            for list of mtypes, see ``datatypes.SCITYPE_REGISTER``
+
+            for specifications, see ``examples/AA_datatypes_and_datasets.ipynb``
+
+            Not all estimators support panels with multivariate or unequal length
+            series, see the :ref:`tag reference <panel_tags>` for details.
+
+        y_val : validation data to evaluate the loss and metrics at the end of each epoch:
+            sktime compatible tabular data container, Table scitype 1D iterable,
+            of shape [n_instances] or 2D iterable, of shape [n_instances, n_dimensions]
             class labels for fitting
             0-th indices correspond to instance indices in X
             1-st indices (if applicable) correspond to multioutput vector indices in X
@@ -215,14 +244,26 @@ class BaseClassifier(BasePanelMixin):
         # fit timer start
         start = int(round(time.time() * 1000))
 
+        # check validation data - both should be present ot nor
+        if (X_val is None and y_val is not None) or (
+            X_val is not None and y_val is None
+        ):
+            raise ValueError("Both X_val and y_val should be provided or neither")
+        elif X_val is not None and y_val is not None:
+            val_given = True
+        else:
+            val_given = False
+
         # check and convert y for multioutput vectorization
         y, y_metadata, y_inner_mtype = self._check_y(y, return_to_mtype=True)
+        if val_given is not None:
+            y_val, _, _ = self._check_y(y_val, return_to_mtype=True)
         self._y_metadata = y_metadata
         self._y_inner_mtype = y_inner_mtype
         self._is_vectorized = isinstance(y, VectorizedDF)
 
         if self._is_vectorized:
-            self._vectorize("fit", X=X, y=y)
+            self._vectorize("fit", X=X, y=y, X_val=X_val, y_val=y_val)
             # fit timer end
             self.fit_time_ = int(round(time.time() * 1000)) - start
             # this should happen last: fitted state is set to True
@@ -234,14 +275,27 @@ class BaseClassifier(BasePanelMixin):
         # convenience conversions to allow user flexibility:
         # if X is 2D array, convert to 3D, if y is Series, convert to numpy
         X, y = self._internal_convert(X, y)
+        if val_given:
+            X_val, y_val = self._internal_convert(X_val, y_val)
+
+        # get characteristics & check this classifier can handle characteristics
         X_metadata = self._check_input(
             X, y, return_metadata=self.METADATA_REQ_IN_CHECKS
         )
         X_mtype = X_metadata["mtype"]
         self._X_metadata = X_metadata
-
-        # Check this classifier can handle characteristics
         self._check_capabilities(X_metadata)
+
+        # check congruency of train and validation data
+        if val_given:
+            labels_y, labels_y_val = np.unique(y), np.unique(y_val)
+            if not np.array_equal(labels_y, labels_y_val):
+                msg = (
+                    f"Train and validation data contain differing labels."
+                    f"Unique train labels: {labels_y}."
+                    f"Unique val labels: {labels_y_val}."
+                )
+                warn(msg, obj=self)
 
         # remember class labels
         self.classes_ = np.unique(y)
@@ -257,8 +311,12 @@ class BaseClassifier(BasePanelMixin):
             self._is_fitted = True
             return self
 
-        # Convert data as dictated by the classifier tags
+        # convert data as dictated by the classifier tags
         X = self._convert_X(X, X_mtype)
+        if val_given:
+            X_val = self._convert_X(X_val, X_mtype)
+
+        # multithread setup
         multithread = self.get_tag("capability:multithreading")
         if multithread:
             try:
@@ -269,7 +327,10 @@ class BaseClassifier(BasePanelMixin):
                 )
 
         # pass coerced and checked data to inner _fit
-        self._fit(X, y)
+        if val_given:
+            self._fit(X, y, X_val, y_val)
+        else:
+            self._fit(X, y)
         self.fit_time_ = int(round(time.time() * 1000)) - start
 
         # this should happen last: fitted state is set to True

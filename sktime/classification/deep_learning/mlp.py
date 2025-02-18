@@ -148,7 +148,7 @@ class MLPClassifier(BaseDeepClassifier):
         )
         return model
 
-    def _fit(self, X, y):
+    def _fit(self, X, y, X_val=None, y_val=None):
         """Fit the classifier on the training set (X, y).
 
         Parameters
@@ -157,14 +157,28 @@ class MLPClassifier(BaseDeepClassifier):
             The training input samples.
         y : np.ndarray of shape n
             The training data class labels.
+        X_val : np.ndarray of shape = (n_instances (n), n_dimensions (d), series_length (m))
+            The validation input samples.
+        y_val : np.ndarray of shape n
+            The validation data class labels.
 
         Returns
         -------
         self : object
         """
         y_onehot = self._convert_y_to_keras(y)
+        if y_val is not None:
+            y_val_onehot = self._convert_y_to_keras(y_val)
         # Transpose to conform to Keras input style.
         X = X.transpose(0, 2, 1)
+        if X_val is not None:
+            X_val = X_val.transpose(0, 2, 1)
+
+        # compose validation data if both given
+        if X_val is not None and y_val is not None:
+            validation_data = (X_val, y_val_onehot)
+        else:
+            validation_data = None
 
         check_random_state(self.random_state)
         self.input_shape = X.shape[1:]
@@ -177,6 +191,7 @@ class MLPClassifier(BaseDeepClassifier):
             batch_size=self.batch_size,
             epochs=self.n_epochs,
             verbose=self.verbose,
+            validation_data=validation_data,
             callbacks=deepcopy(self.callbacks) if self.callbacks else [],
         )
         return self
