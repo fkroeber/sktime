@@ -116,7 +116,7 @@ class BaggingClassifier(BaseClassifier):
             tags_to_clone = ["capability:multivariate", "capability:missing_values"]
         self.clone_tags(estimator, tags_to_clone)
 
-    def _fit(self, X, y):
+    def _fit(self, X, y, X_val=None, y_val=None):
         """Fit time series classifier to training data.
 
         Parameters
@@ -129,6 +129,15 @@ class BaggingClassifier(BaseClassifier):
             for list of other mtypes, see datatypes.SCITYPE_REGISTER
             for specifications, see examples/AA_datatypes_and_datasets.ipynb
         y : 1D np.array of int, of shape [n_instances] - class labels for fitting
+            indices correspond to instance indices in X
+        X_val : guaranteed to be of a type in self.get_tag("X_inner_mtype")
+            if self.get_tag("X_inner_mtype") = "numpy3D":
+                3D np.ndarray of shape = [n_instances, n_dimensions, series_length]
+            if self.get_tag("X_inner_mtype") = "nested_univ":
+                pd.DataFrame with each column a dimension, each cell a pd.Series
+            for list of other mtypes, see datatypes.SCITYPE_REGISTER
+            for specifications, see examples/AA_datatypes_and_datasets.ipynb
+        y_val : 1D np.array of int, of shape [n_instances] - class labels for validation
             indices correspond to instance indices in X
 
         Returns
@@ -175,15 +184,25 @@ class BaggingClassifier(BaseClassifier):
             if not isinstance(X.index, pd.MultiIndex):
                 Xi = X.loc[inst_ix_i, col_ix_i]
                 Xi = Xi.reset_index(drop=True)
+                if X_val is not None:
+                    X_val = X.loc[:, col_ix_i]
+                    X_val = X_val.reset_index(drop=True)
             else:
                 Xis = [X.loc[[ix], col_ix_i].droplevel(0) for ix in inst_ix_i]
                 Xi = pd.concat(Xis, keys=pd.RangeIndex(len(inst_ix_i)))
+                if X_val is not None:
+                    X_val = X_val.loc[:, col_ix_i]
 
             if bootstrap_ft:
                 Xi.columns = pd.RangeIndex(len(col_ix_i))
+                if X_val is not None:
+                    X_val.columns = pd.RangeIndex(len(col_ix_i))
 
             yi = y[row_ss]
-            self.estimators_ += [esti.fit(Xi, yi)]
+            if y_val is not None:
+                self.estimators_ += [esti.fit(Xi, yi, X_val, y_val)]
+            else:
+                self.estimators_ += [esti.fit(Xi, yi)]
             self._col_ixis += [col_ix_i]
 
         return self

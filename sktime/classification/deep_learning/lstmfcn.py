@@ -149,7 +149,7 @@ class LSTMFCNClassifier(BaseDeepClassifier):
 
         return model
 
-    def _fit(self, X, y):
+    def _fit(self, X, y, X_val=None, y_val=None):
         """
         Fit the classifier on the training set (X, y).
 
@@ -160,18 +160,12 @@ class LSTMFCNClassifier(BaseDeepClassifier):
             n_dimensions is assumed to be 1.
         y : array-like, shape = [n_instances]
             The training data class labels.
-        input_checks : boolean
-            whether to check the X and y parameters
-        validation_X : a nested pd.Dataframe, or array-like of shape =
-        (n_instances, series_length, n_dimensions)
-            The validation samples. If a 2D array-like is passed,
+        X_val : a nested pd.Dataframe, or (if input_checks=False) array-like of
+        shape = (n_instances, series_length, n_dimensions)
+            The validation input samples. If a 2D array-like is passed,
             n_dimensions is assumed to be 1.
-            Unless strictly defined by the user via callbacks (such as
-            EarlyStopping), the presence or state of the validation
-            data does not alter training in any way. Predictions at each epoch
-            are stored in the model's fit history.
-        validation_y : array-like, shape = [n_instances]
-            The validation class labels.
+        y_val : array-like, shape = [n_instances]
+            The validation data class labels.
 
         Returns
         -------
@@ -180,10 +174,20 @@ class LSTMFCNClassifier(BaseDeepClassifier):
         check_random_state(self.random_state)
 
         y_onehot = self._convert_y_to_keras(y)
+        if y_val is not None:
+            y_val_onehot = self._convert_y_to_keras(y_val)
 
         # Remove?
         # Transpose to conform to Keras input style.
         X = X.transpose(0, 2, 1)
+        if X_val is not None:
+            X_val = X_val.transpose(0, 2, 1)
+
+        # compose validation data if both given
+        if X_val is not None and y_val is not None:
+            validation_data = (X_val, y_val_onehot)
+        else:
+            validation_data = None
 
         # ignore the number of instances, X.shape[0],
         # just want the shape of each instance
@@ -200,6 +204,7 @@ class LSTMFCNClassifier(BaseDeepClassifier):
             batch_size=self.batch_size,
             epochs=self.n_epochs,
             verbose=self.verbose,
+            validation_data=validation_data,
             callbacks=deepcopy(self._callbacks) if self._callbacks else None,
         )
 
