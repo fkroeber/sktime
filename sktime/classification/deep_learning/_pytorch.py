@@ -8,8 +8,9 @@ __all__ = ["BaseDeepClassifierPytorch"]
 import abc
 
 import numpy as np
-from sklearn.preprocessing import LabelEncoder
+import pytorch_lightning as pl
 
+from sklearn.preprocessing import LabelEncoder
 from sktime.classification.base import BaseClassifier
 from sktime.utils.dependencies import _check_soft_dependencies
 
@@ -52,6 +53,9 @@ class BaseDeepClassifierPytorch(BaseClassifier):
         optimizer=None,
         optimizer_kwargs=None,
         lr=0.001,
+        lr_scheduler=None,
+        lr_scheduler_kwargs=None,
+        callbacks=None,
         verbose=True,
         random_state=None,
     ):
@@ -62,6 +66,9 @@ class BaseDeepClassifierPytorch(BaseClassifier):
         self.optimizer = optimizer
         self.optimizer_kwargs = optimizer_kwargs
         self.lr = lr
+        self.lr_scheduler = lr_scheduler
+        self.lr_scheduler_kwargs = lr_scheduler_kwargs
+        self.callbacks = callbacks if callbacks else []
         self.verbose = verbose
         self.random_state = random_state
 
@@ -76,31 +83,103 @@ class BaseDeepClassifierPytorch(BaseClassifier):
         # instantiate optimizers
         self.optimizers = OPTIMIZERS
 
-    def _fit(self, X, y):
+    def _build_lightning_module(self):
+
+        class LitNetwork(pl.LightningModule):
+            def __init__(
+                self, network, criterion, optimizer, lr_scheduler, lr_scheduler_kwargs
+            ):
+                super().__init__()
+                self.network = network
+                self.criterion = criterion
+                self.optimizer = optimizer
+                self.lr_scheduler = lr_scheduler
+                self.lr_scheduler_kwargs = lr_scheduler_kwargs
+
+            def forward(self, x):
+                return self.network(x)
+
+            def training_step(self, batch, batch_idx):
+                inputs, targets = batch
+                outputs = self.network(**inputs)
+                loss = self.criterion(outputs, targets)
+                self.log(
+                    "train_loss", loss, prog_bar=True, on_step=False, on_epoch=True
+                )
+                return loss
+
+            def validation_step(self, batch, batch_idx):
+                inputs, targets = batch
+                outputs = self.network(**inputs)
+                loss = self.criterion(outputs, targets)
+                self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
+
+            def on_train_end(self):
+                # Look for ModelCheckpoint in callbacks
+                for callback in self.trainer.callbacks:
+                    if isinstance(callback, pl.callbacks.ModelCheckpoint):
+                        # Load the best model weights
+                        if callback.best_model_path:
+                            print(
+                                f"Restoring best model from: {callback.best_model_path}"
+                            )
+                            self.load_state_dict(
+                                torch.load(callback.best_model_path)["state_dict"]
+                            )
+                        break
+
+            def configure_optimizers(self):
+                optim_dict = {}
+                optim_dict["optimizer"] = self.optimizer
+                if self.lr_scheduler:
+                    interval = self.lr_scheduler_kwargs.pop("interval", "epoch")
+                    monitor = self.lr_scheduler_kwargs.pop("monitor", "val_loss")
+                    frequency = self.lr_scheduler_kwargs.pop("frequency", 1)
+                    optim_dict["lr_scheduler"] = {
+                        "scheduler": self.lr_scheduler(
+                            self.optimizer, **self.lr_scheduler_kwargs
+                        ),
+                        "interval": interval,
+                        "monitor": monitor,
+                        "frequency": frequency,
+                    }
+                return optim_dict
+
+        return LitNetwork(
+            self.network,
+            self._instantiate_criterion(),
+            self._instantiate_optimizer(),
+            self.lr_scheduler,
+            self.lr_scheduler_kwargs,
+        )
+
+    def _fit(self, X, y, X_val=None, y_val=None):
+        # encode y
         y = self._encode_y(y)
+        if y_val is not None:
+            y_val = self._encode_y(y_val)
 
+        # build dataloaders
+        train_dataloader = self._build_dataloader(X, y)
+        val_dataloader = (
+            self._build_dataloader(X_val, y_val) if X_val is not None else None
+        )
+
+        # instantiate the torch network & lightning module
         self.network = self._build_network(X, y)
+        self.model = self._build_lightning_module()
 
-        self._criterion = self._instantiate_criterion()
-        self._optimizer = self._instantiate_optimizer()
-
-        dataloader = self._build_dataloader(X, y)
-
-        self.network.train()
-        for epoch in range(self.num_epochs):
-            self._run_epoch(epoch, dataloader)
-
-    def _run_epoch(self, epoch, dataloader):
-        losses = []
-        for inputs, outputs in dataloader:
-            y_pred = self.network(**inputs)
-            loss = self._criterion(y_pred, outputs)
-            self._optimizer.zero_grad()
-            loss.backward()
-            self._optimizer.step()
-            losses.append(loss.item())
-        if self.verbose:
-            print(f"Epoch {epoch+1}: Loss: {np.average(losses)}")
+        # initialize the trainer
+        trainer = pl.Trainer(
+            max_epochs=self.num_epochs,
+            callbacks=self.callbacks,
+            enable_progress_bar=self.verbose,
+        )
+        trainer.fit(
+            self.model,
+            train_dataloaders=train_dataloader,
+            val_dataloaders=val_dataloader,
+        )
 
     def _instantiate_optimizer(self):
         if self.optimizer:
