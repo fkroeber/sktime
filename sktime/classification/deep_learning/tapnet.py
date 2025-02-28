@@ -214,7 +214,7 @@ class TapNetClassifier(BaseDeepClassifier):
 
         return model
 
-    def _fit(self, X, y, X_val=None, y_val=None):
+    def _fit(self, X, y, X_val=None, y_val=None, **kwargs):
         """Fit the classifier on the training set (X, y).
 
         Parameters
@@ -227,6 +227,7 @@ class TapNetClassifier(BaseDeepClassifier):
             Input validation samples
         y_val   : np.ndarray of shape n
             Input validation class labels
+        **kwargs : additional fitting parameters
 
         Returns
         -------
@@ -260,6 +261,7 @@ class TapNetClassifier(BaseDeepClassifier):
             verbose=self.verbose,
             validation_data=validation_data,
             callbacks=deepcopy(self.callbacks) if self.callbacks else [],
+            **kwargs,
         )
 
         return self

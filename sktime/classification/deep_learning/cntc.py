@@ -215,7 +215,7 @@ class CNTCClassifier(BaseDeepClassifier):
             trainX = np.concatenate(trainXs, axis=2)
         return trainX
 
-    def _fit(self, X, y):
+    def _fit(self, X, y, **kwargs):
         """Fit the classifier on the training set (X, y).
 
         Parameters
@@ -224,6 +224,7 @@ class CNTCClassifier(BaseDeepClassifier):
             The training input samples.
         y : np.ndarray of shape n
             The training data class labels.
+        **kwargs : additional fitting parameters
 
         Returns
         -------
@@ -246,6 +247,7 @@ class CNTCClassifier(BaseDeepClassifier):
             epochs=self.n_epochs,
             verbose=self.verbose,
             callbacks=self._callbacks,
+            **kwargs,
         )
         return self
 

@@ -190,7 +190,7 @@ class MCDCNNClassifier(BaseDeepClassifier):
 
         return model
 
-    def _fit(self, X, y):
+    def _fit(self, X, y, **kwargs):
         """Fit the classifier on the training set (X, y).
 
         Parameters
@@ -199,6 +199,7 @@ class MCDCNNClassifier(BaseDeepClassifier):
             The training input samples.
         y : np.ndarray of shape n
             The training data class labels.
+        **kwargs: additional fitting parameters
 
         Returns
         -------
@@ -224,6 +225,7 @@ class MCDCNNClassifier(BaseDeepClassifier):
             batch_size=self.batch_size,
             verbose=self.verbose,
             callbacks=self.callbacks_,
+            **kwargs,
         )
 
         return self

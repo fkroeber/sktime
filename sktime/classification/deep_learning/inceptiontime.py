@@ -173,7 +173,7 @@ class InceptionTimeClassifier(BaseDeepClassifier):
 
         return model
 
-    def _fit(self, X, y, X_val=None, y_val=None):
+    def _fit(self, X, y, X_val=None, y_val=None, **kwargs):
         """Fit the classifier on the training set (X, y).
 
         Parameters
@@ -186,6 +186,7 @@ class InceptionTimeClassifier(BaseDeepClassifier):
             The validation input samples.
         y_val : np.ndarray of shape n
             The validation data class labels.
+        **kwargs : additional fitting parameters
 
         Returns
         -------
@@ -221,6 +222,7 @@ class InceptionTimeClassifier(BaseDeepClassifier):
             verbose=self.verbose,
             validation_data=validation_data,
             callbacks=deepcopy(callbacks) if callbacks else [],
+            **kwargs,
         )
         return self
 

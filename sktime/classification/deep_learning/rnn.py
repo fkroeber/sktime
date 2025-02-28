@@ -139,7 +139,7 @@ class SimpleRNNClassifier(BaseDeepClassifier):
         model.compile(loss=self.loss, optimizer=self.optimizer_, metrics=metrics)
         return model
 
-    def _fit(self, X, y):
+    def _fit(self, X, y, **kwargs):
         """Fit the classifier on the training set (X, y).
 
         Parameters
@@ -150,6 +150,7 @@ class SimpleRNNClassifier(BaseDeepClassifier):
             n_dimensions is assumed to be 1.
         y : array-like, shape = [n_instances]
             The training data class labels.
+        **kwargs : additional fitting parameters
 
         Returns
         -------
@@ -211,6 +212,7 @@ class SimpleRNNClassifier(BaseDeepClassifier):
             epochs=self.n_epochs,
             verbose=self.verbose,
             callbacks=self.callbacks_,
+            **kwargs,
         )
         return self
 

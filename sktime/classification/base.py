@@ -166,7 +166,7 @@ class BaseClassifier(BasePanelMixin):
         else:
             return NotImplemented
 
-    def fit(self, X, y, X_val=None, y_val=None):
+    def fit(self, X, y, X_val=None, y_val=None, **kwargs):
         """
         Fit time series classifier to training data.
 
@@ -233,6 +233,8 @@ class BaseClassifier(BasePanelMixin):
             0-th indices correspond to instance indices in X
             1-st indices (if applicable) correspond to multioutput vector indices in X
             supported sktime types: np.ndarray (1D, 2D), pd.Series, pd.DataFrame
+
+        **kwargs : additional fitting parameters
 
         Returns
         -------
@@ -328,9 +330,9 @@ class BaseClassifier(BasePanelMixin):
 
         # pass coerced and checked data to inner _fit
         if val_given:
-            self._fit(X, y, X_val, y_val)
+            self._fit(X, y, X_val, y_val, **kwargs)
         else:
-            self._fit(X, y)
+            self._fit(X, y, **kwargs)
         self.fit_time_ = int(round(time.time() * 1000)) - start
 
         # this should happen last: fitted state is set to True

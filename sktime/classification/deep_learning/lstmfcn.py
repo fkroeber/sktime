@@ -149,7 +149,7 @@ class LSTMFCNClassifier(BaseDeepClassifier):
 
         return model
 
-    def _fit(self, X, y, X_val=None, y_val=None):
+    def _fit(self, X, y, X_val=None, y_val=None, **kwargs):
         """
         Fit the classifier on the training set (X, y).
 
@@ -166,6 +166,7 @@ class LSTMFCNClassifier(BaseDeepClassifier):
             n_dimensions is assumed to be 1.
         y_val : array-like, shape = [n_instances]
             The validation data class labels.
+        **kwargs : additional fitting parameters
 
         Returns
         -------
@@ -206,6 +207,7 @@ class LSTMFCNClassifier(BaseDeepClassifier):
             verbose=self.verbose,
             validation_data=validation_data,
             callbacks=deepcopy(self._callbacks) if self._callbacks else None,
+            **kwargs,
         )
 
         return self
