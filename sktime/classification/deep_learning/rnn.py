@@ -12,6 +12,8 @@ from sktime.classification.deep_learning.base import BaseDeepClassifier
 from sktime.networks.rnn import RNNNetwork
 from sktime.utils.dependencies import _check_dl_dependencies
 
+from tensorflow import keras
+
 
 class SimpleRNNClassifier(BaseDeepClassifier):
     """Simple recurrent neural network.
@@ -139,33 +141,43 @@ class SimpleRNNClassifier(BaseDeepClassifier):
         model.compile(loss=self.loss, optimizer=self.optimizer_, metrics=metrics)
         return model
 
-    def _fit(self, X, y, **kwargs):
+    def _fit(self, X, y, X_val=None, y_val=None, **kwargs):
         """Fit the classifier on the training set (X, y).
 
         Parameters
         ----------
-        X : a nested pd.Dataframe, or (if input_checks=False) array-like of
-        shape = (n_instances, series_length, n_dimensions)
-            The training input samples. If a 2D array-like is passed,
-            n_dimensions is assumed to be 1.
-        y : array-like, shape = [n_instances]
+        X : np.ndarray of shape = (n_instances (n), n_dimensions (d), series_length (m))
+            The training input samples.
+        y : np.ndarray of shape n
             The training data class labels.
+        X_val : np.ndarray of shape = (n_instances (n), n_dimensions (d), series_length (m))
+            The validation input samples.
+        y_val : np.ndarray of shape n
+            The validation data class labels.
         **kwargs : additional fitting parameters
 
         Returns
         -------
         self : object
         """
-        from tensorflow import keras
-
         y_onehot = self._convert_y_to_keras(y)
+        if y_val is not None:
+            y_val_onehot = self._convert_y_to_keras(y_val)
+
+        # Transpose to conform to Keras input style.
         X = X.transpose(0, 2, 1)
+        if X_val is not None:
+            X_val = X_val.transpose(0, 2, 1)
+
+        # compose validation data if both given
+        if X_val is not None and y_val is not None:
+            validation_data = (X_val, y_val_onehot)
+        else:
+            validation_data = None
 
         check_random_state(self.random_state)
         self.input_shape = X.shape[1:]
-
         self.model_ = self.build_model(self.input_shape, self.n_classes_)
-
         if self.verbose:
             self.model_.summary()
 
@@ -211,6 +223,7 @@ class SimpleRNNClassifier(BaseDeepClassifier):
             batch_size=self.batch_size,
             epochs=self.n_epochs,
             verbose=self.verbose,
+            validation_data=validation_data,
             callbacks=self.callbacks_,
             **kwargs,
         )
