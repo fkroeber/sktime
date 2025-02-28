@@ -127,13 +127,3 @@ class MCDCNNNetwork(BaseDeepNetwork):
         )
 
         return input_layers, output_layer
-
-    def _prepare_input(self, X):
-        # helper function to change X to conform to expected format.
-        new_X = []
-        n_vars = X.shape[2]
-
-        for i in range(n_vars):
-            new_X.append(X[:, :, i : i + 1])
-
-        return new_X
