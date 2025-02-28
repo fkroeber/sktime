@@ -8,6 +8,8 @@ from sktime.classification.deep_learning.base import BaseDeepClassifier
 from sktime.networks.cntc import CNTCNetwork
 from sktime.utils.dependencies import _check_dl_dependencies
 
+from copy import deepcopy
+
 
 class CNTCClassifier(BaseDeepClassifier):
     """Contextual Time-series Neural Classifier (CNTC), as described in [1].
@@ -215,7 +217,7 @@ class CNTCClassifier(BaseDeepClassifier):
             trainX = np.concatenate(trainXs, axis=2)
         return trainX
 
-    def _fit(self, X, y, **kwargs):
+    def _fit(self, X, y, X_val=None, y_val=None, **kwargs):
         """Fit the classifier on the training set (X, y).
 
         Parameters
@@ -224,29 +226,44 @@ class CNTCClassifier(BaseDeepClassifier):
             The training input samples.
         y : np.ndarray of shape n
             The training data class labels.
+        X_val : np.ndarray of shape = (n_instances (n), n_dimensions (d), series_length (m))
+            The validation input samples.
+        y_val : np.ndarray of shape n
+            The validation data class labels.
         **kwargs : additional fitting parameters
 
         Returns
         -------
         self : object
         """
-        if self.callbacks is None:
-            self._callbacks = []
         y_onehot = self._convert_y_to_keras(y)
+        if y_val is not None:
+            y_val_onehot = self._convert_y_to_keras(y_val)
+
+        X2 = self.prepare_input(X)
+        if X_val is not None:
+            X2_val = self.prepare_input(X_val)
+
+        # compose validation data if both given
+        if X_val is not None and y_val is not None:
+            validation_data = ([X2_val, X_val, X_val], y_val_onehot)
+        else:
+            validation_data = None
 
         check_random_state(self.random_state)
         self.input_shape = X.shape[1:]
         self.model_ = self.build_model(self.input_shape, self.n_classes_)
-        X2 = self.prepare_input(X)
         if self.verbose:
             self.model_.summary()
+
         self.history = self.model_.fit(
             [X2, X, X],
             y_onehot,
             batch_size=self.batch_size,
             epochs=self.n_epochs,
             verbose=self.verbose,
-            callbacks=self._callbacks,
+            validation_data=validation_data,
+            callbacks=deepcopy(self.callbacks) if self.callbacks else [],
             **kwargs,
         )
         return self
