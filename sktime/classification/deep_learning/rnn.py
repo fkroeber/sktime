@@ -6,9 +6,7 @@ __all__ = ["SimpleRNNClassifier"]
 
 from copy import deepcopy
 
-from sklearn.utils import check_random_state
-
-from sktime.classification.deep_learning.base import BaseDeepClassifier
+from sktime.classification.deep_learning._tensorflow import BaseDeepClassifier
 from sktime.networks.rnn import RNNNetwork
 from sktime.utils.dependencies import _check_dl_dependencies
 
@@ -27,8 +25,6 @@ class SimpleRNNClassifier(BaseDeepClassifier):
     units : int, default = 6
         number of units in the network
     callbacks : list of tf.keras.callbacks.Callback objects, default = None
-    add_default_callback : bool, default = True
-        whether to add default callback
     random_state : int or None, default=0
         Seed for random number generation.
     verbose : boolean, default = False
@@ -73,7 +69,6 @@ class SimpleRNNClassifier(BaseDeepClassifier):
         batch_size=1,
         units=6,
         callbacks=None,
-        add_default_callback=True,
         random_state=0,
         verbose=False,
         loss="mean_squared_error",
@@ -89,7 +84,6 @@ class SimpleRNNClassifier(BaseDeepClassifier):
         self.verbose = verbose
         self.units = units
         self.callbacks = callbacks
-        self.add_default_callback = add_default_callback
         self.random_state = random_state
         self.loss = loss
         self.metrics = metrics
@@ -141,93 +135,21 @@ class SimpleRNNClassifier(BaseDeepClassifier):
         model.compile(loss=self.loss, optimizer=self.optimizer_, metrics=metrics)
         return model
 
-    def _fit(self, X, y, X_val=None, y_val=None, **kwargs):
-        """Fit the classifier on the training set (X, y).
+    def _configure_callbacks(self):
+        """ReduceLROnPlateau callback as default."""
+        if self.callbacks is None:
+            self.callbacks = []
 
-        Parameters
-        ----------
-        X : np.ndarray of shape = (n_instances (n), n_dimensions (d), series_length (m))
-            The training input samples.
-        y : np.ndarray of shape n
-            The training data class labels.
-        X_val : np.ndarray of shape = (n_instances (n), n_dimensions (d), series_length (m))
-            The validation input samples.
-        y_val : np.ndarray of shape n
-            The validation data class labels.
-        **kwargs : additional fitting parameters
-
-        Returns
-        -------
-        self : object
-        """
-        y_onehot = self._convert_y_to_keras(y)
-        if y_val is not None:
-            y_val_onehot = self._convert_y_to_keras(y_val)
-
-        # Transpose to conform to Keras input style.
-        X = X.transpose(0, 2, 1)
-        if X_val is not None:
-            X_val = X_val.transpose(0, 2, 1)
-
-        # compose validation data if both given
-        if X_val is not None and y_val is not None:
-            validation_data = (X_val, y_val_onehot)
-        else:
-            validation_data = None
-
-        check_random_state(self.random_state)
-        self.input_shape = X.shape[1:]
-        self.model_ = self.build_model(self.input_shape, self.n_classes_)
-        if self.verbose:
-            self.model_.summary()
-
-        # add a ReduceLROnPlateau callback is default is enabled
-        # if an instance of ReduceLROnPlateau is already present
-        # then don't add it again.
-        if self.add_default_callback:
+        if not any(
+            isinstance(callback, keras.callbacks.ReduceLROnPlateau)
+            for callback in self.callbacks
+        ):
             reduce_lr = keras.callbacks.ReduceLROnPlateau(
-                monitor="loss",
-                factor=0.5,
-                patience=50,
-                min_lr=0.0001,
+                monitor="loss", factor=0.5, patience=50, min_lr=0.0001
             )
-            if self.callbacks is None:
-                self.callbacks_ = [
-                    reduce_lr,
-                ]
-            elif isinstance(self.callbacks, keras.callbacks.Callback):
-                self.callbacks_ = [
-                    self.callbacks,
-                    reduce_lr,
-                ]
-            elif isinstance(self.callbacks, tuple):
-                self.callbacks_ = deepcopy([i for i in self.callbacks])
-                if not any(
-                    isinstance(callback, keras.callbacks.ReduceLROnPlateau)
-                    for callback in self.callbacks
-                ):
-                    self.callbacks_.append(reduce_lr)
-            else:
-                raise TypeError(
-                    "`callback` can either be None, an instance "
-                    "of keras.callbacks.Callback or a tuple containing "
-                    "keras.callbacks.Callback objects. "
-                    f"But found {type(self.callbacks)} instead."
-                )
-        else:
-            self.callbacks_ = deepcopy(self.callbacks)
+            self.callbacks = self.callbacks + [reduce_lr]
 
-        self.history = self.model_.fit(
-            X,
-            y_onehot,
-            batch_size=self.batch_size,
-            epochs=self.n_epochs,
-            verbose=self.verbose,
-            validation_data=validation_data,
-            callbacks=self.callbacks_,
-            **kwargs,
-        )
-        return self
+        self.callbacks = deepcopy(self.callbacks)
 
     @classmethod
     def get_test_params(cls, parameter_set="default"):

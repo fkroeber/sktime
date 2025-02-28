@@ -2,13 +2,12 @@
 
 __author__ = ["James-Large", "TonyBagnall", "AurumnPegasus"]
 __all__ = ["CNTCClassifier"]
+
 from sklearn.utils import check_random_state
 
-from sktime.classification.deep_learning.base import BaseDeepClassifier
+from sktime.classification.deep_learning._tensorflow import BaseDeepClassifier
 from sktime.networks.cntc import CNTCNetwork
 from sktime.utils.dependencies import _check_dl_dependencies
-
-from copy import deepcopy
 
 
 class CNTCClassifier(BaseDeepClassifier):
@@ -152,7 +151,19 @@ class CNTCClassifier(BaseDeepClassifier):
         )
         return model
 
-    def prepare_input(self, X):
+    def _predict(self, X, **kwargs):
+        import numpy as np
+
+        probs = self._predict_proba(X, **kwargs)
+        rng = check_random_state(self.random_state)
+        return np.array(
+            [
+                self.classes_[int(rng.choice(np.flatnonzero(prob == prob.max())))]
+                for prob in probs
+            ]
+        )
+
+    def _prepare_data(self, X):
         """
         Prepare input for the CLSTM arm of the model.
 
@@ -172,12 +183,14 @@ class CNTCClassifier(BaseDeepClassifier):
 
         Returns
         -------
-        trainX: tuple,
+        X: list,
             The input to be fed to the two arms of CNTC.
         """
         import numpy as np
         import pandas as pd
         from tensorflow import keras
+
+        self.input_shape = X.shape[1:]
 
         if X.shape[2] == 1:
             # Converting data to pandas
@@ -215,91 +228,4 @@ class CNTCClassifier(BaseDeepClassifier):
                 trainXs.append(trainX)
 
             trainX = np.concatenate(trainXs, axis=2)
-        return trainX
-
-    def _fit(self, X, y, X_val=None, y_val=None, **kwargs):
-        """Fit the classifier on the training set (X, y).
-
-        Parameters
-        ----------
-        X : np.ndarray of shape = (n_instances (n), n_dimensions (d), series_length (m))
-            The training input samples.
-        y : np.ndarray of shape n
-            The training data class labels.
-        X_val : np.ndarray of shape = (n_instances (n), n_dimensions (d), series_length (m))
-            The validation input samples.
-        y_val : np.ndarray of shape n
-            The validation data class labels.
-        **kwargs : additional fitting parameters
-
-        Returns
-        -------
-        self : object
-        """
-        y_onehot = self._convert_y_to_keras(y)
-        if y_val is not None:
-            y_val_onehot = self._convert_y_to_keras(y_val)
-
-        X2 = self.prepare_input(X)
-        if X_val is not None:
-            X2_val = self.prepare_input(X_val)
-
-        # compose validation data if both given
-        if X_val is not None and y_val is not None:
-            validation_data = ([X2_val, X_val, X_val], y_val_onehot)
-        else:
-            validation_data = None
-
-        check_random_state(self.random_state)
-        self.input_shape = X.shape[1:]
-        self.model_ = self.build_model(self.input_shape, self.n_classes_)
-        if self.verbose:
-            self.model_.summary()
-
-        self.history = self.model_.fit(
-            [X2, X, X],
-            y_onehot,
-            batch_size=self.batch_size,
-            epochs=self.n_epochs,
-            verbose=self.verbose,
-            validation_data=validation_data,
-            callbacks=deepcopy(self.callbacks) if self.callbacks else [],
-            **kwargs,
-        )
-        return self
-
-    def _predict(self, X, **kwargs):
-        import numpy as np
-
-        probs = self._predict_proba(X, **kwargs)
-        rng = check_random_state(self.random_state)
-        return np.array(
-            [
-                self.classes_[int(rng.choice(np.flatnonzero(prob == prob.max())))]
-                for prob in probs
-            ]
-        )
-
-    def _predict_proba(self, X, **kwargs):
-        """Find probability estimates for each class for all cases in X.
-
-        Parameters
-        ----------
-        X : an np.ndarray of shape = (n_instances, n_dimensions, series_length)
-            The training input samples.
-
-        Returns
-        -------
-        output : array of shape = [n_instances, n_classes] of probabilities
-        """
-        import numpy as np
-
-        X2 = self.prepare_input(X)
-        probs = self.model_.predict([X2, X, X], self.batch_size, **kwargs)
-
-        # check if binary classification
-        if probs.shape[1] == 1:
-            # first column is probability of class 0 and second is of class 1
-            probs = np.hstack([1 - probs, probs])
-        probs = probs / probs.sum(axis=1, keepdims=1)
-        return probs
+        return [trainX, X, X]

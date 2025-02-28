@@ -4,11 +4,11 @@ __all__ = ["InceptionTimeClassifier"]
 
 from copy import deepcopy
 
-from sklearn.utils import check_random_state
-
-from sktime.classification.deep_learning.base import BaseDeepClassifier
+from sktime.classification.deep_learning._tensorflow import BaseDeepClassifier
 from sktime.networks.inceptiontime import InceptionTimeNetwork
 from sktime.utils.dependencies import _check_dl_dependencies
+
+from tensorflow import keras
 
 
 class InceptionTimeClassifier(BaseDeepClassifier):
@@ -173,76 +173,24 @@ class InceptionTimeClassifier(BaseDeepClassifier):
 
         return model
 
-    def _fit(self, X, y, X_val=None, y_val=None, **kwargs):
-        """Fit the classifier on the training set (X, y).
-
-        Parameters
-        ----------
-        X : np.ndarray of shape = (n_instances (n), n_dimensions (d), series_length (m))
-            The training input samples.
-        y : np.ndarray of shape n
-            The training data class labels.
-        X_val : np.ndarray of shape = (n_instances (n), n_dimensions (d), series_length (m))
-            The validation input samples.
-        y_val : np.ndarray of shape n
-            The validation data class labels.
-        **kwargs : additional fitting parameters
-
-        Returns
-        -------
-        self : object
+    def _configure_callbacks(self):
         """
-        y_onehot = self._convert_y_to_keras(y)
-        if y_val is not None:
-            y_val_onehot = self._convert_y_to_keras(y_val)
-        # Transpose to conform to Keras input style.
-        X = X.transpose(0, 2, 1)
-        if X_val is not None:
-            X_val = X_val.transpose(0, 2, 1)
-
-        # compose validation data if both given
-        if X_val is not None and y_val is not None:
-            validation_data = (X_val, y_val_onehot)
-        else:
-            validation_data = None
-
-        check_random_state(self.random_state)
-        self.input_shape = X.shape[1:]
-        self.model_ = self.build_model(self.input_shape, self.n_classes_)
-        if self.verbose:
-            self.model_.summary()
-
-        callbacks = self._check_callbacks(self.callbacks)
-
-        self.history = self.model_.fit(
-            X,
-            y_onehot,
-            batch_size=self.batch_size,
-            epochs=self.n_epochs,
-            verbose=self.verbose,
-            validation_data=validation_data,
-            callbacks=deepcopy(callbacks) if callbacks else [],
-            **kwargs,
-        )
-        return self
-
-    def _check_callbacks(self, callbacks):
-        from tensorflow import keras
-
-        # if user hasn't provided a custom ReduceLROnPlateau via init already,
-        # add the default from literature
-        if callbacks is None:
-            callbacks = []
+        If user hasn't provided a custom ReduceLROnPlateau via init already,
+        add the default from literature
+        """
+        if self.callbacks is None:
+            self.callbacks = []
 
         if not any(
             isinstance(callback, keras.callbacks.ReduceLROnPlateau)
-            for callback in callbacks
+            for callback in self.callbacks
         ):
             reduce_lr = keras.callbacks.ReduceLROnPlateau(
                 monitor="loss", factor=0.5, patience=50, min_lr=0.0001
             )
-            callbacks = callbacks + [reduce_lr]
-        return callbacks
+            self.callbacks = self.callbacks + [reduce_lr]
+
+        self.callbacks = deepcopy(self.callbacks)
 
     @classmethod
     def get_test_params(cls, parameter_set="default"):

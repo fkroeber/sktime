@@ -4,11 +4,7 @@ __author__ = ["jnrusson1", "solen0id"]
 
 __all__ = ["LSTMFCNClassifier"]
 
-from copy import deepcopy
-
-from sklearn.utils import check_random_state
-
-from sktime.classification.deep_learning.base import BaseDeepClassifier
+from sktime.classification.deep_learning._tensorflow import BaseDeepClassifier
 from sktime.networks.lstmfcn import LSTMFCNNetwork
 
 
@@ -148,69 +144,6 @@ class LSTMFCNClassifier(BaseDeepClassifier):
         self._callbacks = self.callbacks or None
 
         return model
-
-    def _fit(self, X, y, X_val=None, y_val=None, **kwargs):
-        """
-        Fit the classifier on the training set (X, y).
-
-        ----------
-        X : a nested pd.Dataframe, or (if input_checks=False) array-like of
-        shape = (n_instances, series_length, n_dimensions)
-            The training input samples. If a 2D array-like is passed,
-            n_dimensions is assumed to be 1.
-        y : array-like, shape = [n_instances]
-            The training data class labels.
-        X_val : a nested pd.Dataframe, or (if input_checks=False) array-like of
-        shape = (n_instances, series_length, n_dimensions)
-            The validation input samples. If a 2D array-like is passed,
-            n_dimensions is assumed to be 1.
-        y_val : array-like, shape = [n_instances]
-            The validation data class labels.
-        **kwargs : additional fitting parameters
-
-        Returns
-        -------
-        self : object
-        """
-        check_random_state(self.random_state)
-
-        y_onehot = self._convert_y_to_keras(y)
-        if y_val is not None:
-            y_val_onehot = self._convert_y_to_keras(y_val)
-
-        # Remove?
-        # Transpose to conform to Keras input style.
-        X = X.transpose(0, 2, 1)
-        if X_val is not None:
-            X_val = X_val.transpose(0, 2, 1)
-
-        # compose validation data if both given
-        if X_val is not None and y_val is not None:
-            validation_data = (X_val, y_val_onehot)
-        else:
-            validation_data = None
-
-        # ignore the number of instances, X.shape[0],
-        # just want the shape of each instance
-        self.input_shape = X.shape[1:]
-
-        self.model_ = self.build_model(self.input_shape, self.n_classes_)
-
-        if self.verbose:
-            self.model_.summary()
-
-        self.history = self.model_.fit(
-            X,
-            y_onehot,
-            batch_size=self.batch_size,
-            epochs=self.n_epochs,
-            verbose=self.verbose,
-            validation_data=validation_data,
-            callbacks=deepcopy(self._callbacks) if self._callbacks else None,
-            **kwargs,
-        )
-
-        return self
 
     @classmethod
     def get_test_params(cls, parameter_set="default"):

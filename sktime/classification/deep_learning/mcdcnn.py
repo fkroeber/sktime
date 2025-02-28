@@ -2,12 +2,9 @@
 
 __author__ = ["James-Large"]
 
-from copy import deepcopy
-
 import numpy as np
-from sklearn.utils import check_random_state
 
-from sktime.classification.deep_learning.base import BaseDeepClassifier
+from sktime.classification.deep_learning._tensorflow import BaseDeepClassifier
 from sktime.networks.mcdcnn import MCDCNNNetwork
 from sktime.utils.dependencies import _check_dl_dependencies
 
@@ -190,67 +187,6 @@ class MCDCNNClassifier(BaseDeepClassifier):
 
         return model
 
-    def prepare_input(self, X):
-        # helper function to change X to conform to expected format.
-        X = X.transpose(0, 2, 1)
-        new_X = []
-        n_vars = X.shape[2]
-
-        for i in range(n_vars):
-            new_X.append(X[:, :, i : i + 1])
-
-        return new_X
-
-    def _fit(self, X, y, X_val=None, y_val=None, **kwargs):
-        """Fit the classifier on the training set (X, y).
-
-        Parameters
-        ----------
-        X : np.ndarray of shape = (n_instances (n), n_dimensions (d), series_length (m))
-            The training input samples.
-        y : np.ndarray of shape n
-            The training data class labels.
-        X_val : np.ndarray of shape = (n_instances (n), n_dimensions (d), series_length (m))
-            The validation input samples.
-        y_val : np.ndarray of shape n
-            The validation data class labels.
-        **kwargs : additional fitting parameters
-
-        Returns
-        -------
-        self : object
-        """
-        y_onehot = self._convert_y_to_keras(y)
-        if y_val is not None:
-            y_val_onehot = self._convert_y_to_keras(y_val)
-
-        X = self.prepare_input(X)
-        if X_val is not None:
-            X_val = self.prepare_input(X_val)
-
-        # compose validation data if both given
-        if X_val is not None and y_val is not None:
-            validation_data = (X_val, y_val_onehot)
-        else:
-            validation_data = None
-
-        check_random_state(self.random_state)
-        self.input_shape = (X[0].shape[1], len(X))
-        self.model_ = self.build_model(self.input_shape, self.n_classes_)
-        if self.verbose:
-            self.model_.summary()
-        self.history = self.model_.fit(
-            X,
-            y_onehot,
-            epochs=self.n_epochs,
-            batch_size=self.batch_size,
-            verbose=self.verbose,
-            callbacks=deepcopy(self.callbacks) if self.callbacks else [],
-            validation_data=validation_data,
-            **kwargs,
-        )
-        return self
-
     def _predict_proba(self, X, **kwargs):
         """Find probability estimates for each class for all cases in X.
 
@@ -264,7 +200,7 @@ class MCDCNNClassifier(BaseDeepClassifier):
         output : array of shape = [n_instances, n_classes] of probabilities
         """
         self.check_is_fitted()
-        X = self.prepare_input(X)
+        X = self._prepare_data(X)
 
         probs = self.model_.predict(X, self.batch_size, **kwargs)
 
@@ -272,3 +208,14 @@ class MCDCNNClassifier(BaseDeepClassifier):
             probs = np.hstack([1 - probs, probs])
         probs = probs / probs.sum(axis=1, keepdims=1)
         return probs
+
+    def _prepare_data(self, X):
+        X = X.transpose(0, 2, 1)
+        self.input_shape = X.shape[1:]
+        new_X = []
+        n_vars = X.shape[2]
+
+        for i in range(n_vars):
+            new_X.append(X[:, :, i: i + 1])
+
+        return new_X

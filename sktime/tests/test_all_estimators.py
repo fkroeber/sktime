@@ -19,7 +19,7 @@ import pytest
 from _pytest.outcomes import Skipped
 
 from sktime.base import BaseEstimator, BaseObject, load
-from sktime.classification.deep_learning.base import BaseDeepClassifier
+from sktime.classification.deep_learning._tensorflow import BaseDeepClassifier
 from sktime.dists_kernels.base import (
     BasePairwiseTransformer,
     BasePairwiseTransformerPanel,

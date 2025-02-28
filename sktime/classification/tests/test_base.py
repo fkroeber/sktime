@@ -10,7 +10,7 @@ import pytest
 from sklearn.model_selection import KFold
 
 from sktime.classification.base import BaseClassifier
-from sktime.classification.deep_learning.base import BaseDeepClassifier
+from sktime.classification.deep_learning._tensorflow import BaseDeepClassifier
 from sktime.classification.distance_based import KNeighborsTimeSeriesClassifier
 from sktime.classification.dummy import DummyClassifier
 from sktime.tests.test_switch import run_test_module_changed

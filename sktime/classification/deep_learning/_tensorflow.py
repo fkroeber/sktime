@@ -9,6 +9,7 @@ __all__ = ["BaseDeepClassifier"]
 
 import os
 from abc import abstractmethod
+from copy import deepcopy
 
 import numpy as np
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
@@ -70,6 +71,61 @@ class BaseDeepClassifier(BaseClassifier):
         """
         return self.history.history if self.history is not None else None
 
+    def _fit(self, X, y, X_val=None, y_val=None, **kwargs):
+        """Fit the classifier on the training set (X, y).
+
+        Parameters
+        ----------
+        X : np.ndarray of shape = (n_instances (n), n_dimensions (d), series_length (m))
+            The training input samples.
+        y : np.ndarray of shape n
+            The training data class labels.
+        X_val : np.ndarray of shape = (n_instances (n), n_dimensions (d), series_length (m))
+            The validation input samples.
+        y_val : np.ndarray of shape n
+            The validation data class labels.
+        **kwargs : additional fitting parameters
+
+        Returns
+        -------
+        self : object
+        """
+        # prepare input & target data
+        X = self._prepare_data(X)
+        if X_val is not None:
+            X_val = self._prepare_data(X_val)
+
+        y_onehot = self._convert_y_to_keras(y)
+        if y_val is not None:
+            y_val_onehot = self._convert_y_to_keras(y_val)
+
+        # compose validation data if both given
+        if X_val is not None and y_val is not None:
+            validation_data = (X_val, y_val_onehot)
+        else:
+            validation_data = None
+
+        # initialise model and callbacks
+        check_random_state(self.random_state)
+        self.model_ = self.build_model(self.input_shape, self.n_classes_)
+        self._configure_callbacks()
+
+        if self.verbose:
+            self.model_.summary()
+
+        # fit model
+        self.history = self.model_.fit(
+            X,
+            y_onehot,
+            batch_size=self.batch_size,
+            epochs=self.n_epochs,
+            verbose=self.verbose,
+            validation_data=validation_data,
+            callbacks=self.callbacks,
+            **kwargs,
+        )
+        return self
+
     def _predict(self, X, **kwargs):
         probs = self._predict_proba(X, **kwargs)
         rng = check_random_state(self.random_state)
@@ -86,15 +142,14 @@ class BaseDeepClassifier(BaseClassifier):
         Parameters
         ----------
         X : an np.ndarray of shape = (n_instances, n_dimensions, series_length)
-            The training input samples.         input_checks: boolean
-            whether to check the X parameter
+            The training input samples.
 
         Returns
         -------
         output : array of shape = [n_instances, n_classes] of probabilities
         """
         # Transpose to work correctly with keras
-        X = X.transpose((0, 2, 1))
+        X = self._prepare_data(X)
         probs = self.model_.predict(X, self.batch_size, **kwargs)
 
         # check if binary classification
@@ -122,6 +177,26 @@ class BaseDeepClassifier(BaseClassifier):
         # categories='auto' to get rid of FutureWarning
         y = self.onehot_encoder.fit_transform(y)
         return y
+
+    def _configure_callbacks(self):
+        """Add callbacks to the model."""
+        self.callbacks = deepcopy(self.callbacks) if self.callbacks else []
+
+    def _prepare_data(self, X):
+        """Prepare input data for fitting/prediction mode.
+
+        Parameters
+        ----------
+        X : np.ndarray of shape = (n_instances (n), n_dimensions (d), series_length (m))
+            The training input samples.
+
+        Returns
+        -------
+        X : np.ndarray suitable for input to a Keras model
+        """
+        X = X.transpose(0, 2, 1)
+        self.input_shape = X.shape[1:]
+        return X
 
     def __getstate__(self):
         """Get Dict config that will be used when a serialization method is called.
