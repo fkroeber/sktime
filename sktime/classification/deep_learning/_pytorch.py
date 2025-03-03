@@ -9,6 +9,7 @@ import abc
 
 import numpy as np
 import pytorch_lightning as pl
+import torch.nn.functional as F
 
 from sktime.classification.base import BaseClassifier
 from sktime.utils.dependencies import _check_soft_dependencies
@@ -110,6 +111,11 @@ class BaseDeepClassifierPytorch(BaseClassifier):
                 outputs = self.network(**inputs)
                 loss = self.criterion(outputs, targets)
                 self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
+
+            def predict_step(self, batch, batch_idx):
+                logits = self.network(**batch)
+                probs = F.softmax(logits, dim=-1)
+                return probs
 
             def on_train_end(self):
                 # Look for ModelCheckpoint in callbacks
@@ -284,18 +290,13 @@ class BaseDeepClassifierPytorch(BaseClassifier):
             2nd dimension indices correspond to possible labels (integers)
             (i, j)-th entry is predictive probability that i-th instance is of class j
         """
-        import torch.nn.functional as F
-        from torch import cat
-
-        self.network.eval()
-        dataloader = self._build_dataloader(X)
-        y_pred = []
-        for inputs in dataloader:
-            y_pred.append(self.network(**inputs).detach())
-        y_pred = cat(y_pred, dim=0)
-        # (batch_size, num_outputs)
-        y_pred = F.softmax(y_pred, dim=-1)
-        y_pred = y_pred.numpy()
+        test_dataloader = self._build_dataloader(X)
+        trainer = pl.Trainer()
+        outputs = trainer.predict(
+            self.model,
+            dataloaders=test_dataloader,
+        )
+        y_pred = torch.cat(outputs, dim=0).numpy()
         return y_pred
 
     def _encode_y(self, y):

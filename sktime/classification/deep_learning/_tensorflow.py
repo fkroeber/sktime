@@ -12,6 +12,7 @@ from abc import abstractmethod
 from copy import deepcopy
 
 import numpy as np
+import tensorflow as tf
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.utils import check_random_state
 
@@ -128,13 +129,9 @@ class BaseDeepClassifier(BaseClassifier):
 
     def _predict(self, X, **kwargs):
         probs = self._predict_proba(X, **kwargs)
-        rng = check_random_state(self.random_state)
-        return np.array(
-            [
-                self.classes_[int(rng.choice(np.flatnonzero(prob == prob.max())))]
-                for prob in probs
-            ]
-        )
+        max_indices = tf.argmax(probs, axis=1)
+        return_obj = tf.gather(self.classes_, max_indices)
+        return return_obj
 
     def _predict_proba(self, X, **kwargs):
         """Find probability estimates for each class for all cases in X.
