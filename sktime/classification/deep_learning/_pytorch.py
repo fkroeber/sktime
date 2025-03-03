@@ -10,7 +10,6 @@ import abc
 import numpy as np
 import pytorch_lightning as pl
 
-from sklearn.preprocessing import LabelEncoder
 from sktime.classification.base import BaseClassifier
 from sktime.utils.dependencies import _check_soft_dependencies
 
@@ -76,8 +75,6 @@ class BaseDeepClassifierPytorch(BaseClassifier):
             if _check_soft_dependencies("torch", severity="none"):
                 torch.manual_seed(self.random_state)
 
-        # use this when y has str
-        self.label_encoder = None
         super().__init__()
 
         # instantiate optimizers
@@ -302,18 +299,14 @@ class BaseDeepClassifierPytorch(BaseClassifier):
         return y_pred
 
     def _encode_y(self, y):
-        unique = np.unique(y)
-        if np.array_equal(unique, np.arange(len(unique))):
-            return y
-
-        self.label_encoder = LabelEncoder()
-        return self.label_encoder.fit_transform(y)
+        # encode target values as integers
+        y = np.vectorize(self._class_dictionary.get)(y)
+        return y
 
     def _decode_y(self, y):
-        if self.label_encoder is None:
-            return y
-
-        return self.label_encoder.inverse_transform(y)
+        _class_dict = dict(map(reversed, self._class_dictionary.items()))
+        y = np.vectorize(_class_dict.get)(y)
+        return y
 
     @classmethod
     def get_test_params(cls, parameter_set="default"):

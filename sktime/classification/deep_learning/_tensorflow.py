@@ -12,7 +12,7 @@ from abc import abstractmethod
 from copy import deepcopy
 
 import numpy as np
-from sklearn.preprocessing import LabelEncoder, OneHotEncoder
+from sklearn.preprocessing import OneHotEncoder
 from sklearn.utils import check_random_state
 
 from sktime.base._base import SERIALIZATION_FORMATS
@@ -161,20 +161,21 @@ class BaseDeepClassifier(BaseClassifier):
 
     def _convert_y_to_keras(self, y):
         """Convert y to required Keras format."""
-        self.label_encoder = LabelEncoder()
-        y = self.label_encoder.fit_transform(y)
-        self.classes_ = self.label_encoder.classes_
-        self.n_classes_ = len(self.classes_)
-        y = y.reshape(len(y), 1)
-
         # in sklearn 1.2, sparse was renamed to sparse_output
         if _check_soft_dependencies("scikit-learn>=1.2", severity="none"):
             sparse_kw = {"sparse_output": False}
         else:
             sparse_kw = {"sparse": False}
 
-        self.onehot_encoder = OneHotEncoder(categories="auto", **sparse_kw)
-        # categories='auto' to get rid of FutureWarning
+        # encode target values as integers
+        y = np.vectorize(self._class_dictionary.get)(y)
+
+        # encode target values in onehot fashion
+        self.onehot_encoder = OneHotEncoder(
+            categories=[np.fromiter(self._class_dictionary.values(), dtype="int")],
+            **sparse_kw,
+        )
+        y = y.reshape(len(y), 1)
         y = self.onehot_encoder.fit_transform(y)
         return y
 

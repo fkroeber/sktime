@@ -166,7 +166,7 @@ class BaseClassifier(BasePanelMixin):
         else:
             return NotImplemented
 
-    def fit(self, X, y, X_val=None, y_val=None, **kwargs):
+    def fit(self, X, y, X_val=None, y_val=None, target_dict=None, **kwargs):
         """
         Fit time series classifier to training data.
 
@@ -234,6 +234,12 @@ class BaseClassifier(BasePanelMixin):
             1-st indices (if applicable) correspond to multioutput vector indices in X
             supported sktime types: np.ndarray (1D, 2D), pd.Series, pd.DataFrame
 
+        target_dict : dict, default = None
+            Mapping from encoded target values to class names (numerical integers)
+            to be used for training the network. If None, inferred automatically.
+            Relevant for cases where train, val and test splits contain different
+            target values to unify their representation.
+
         **kwargs : additional fitting parameters
 
         Returns
@@ -265,7 +271,15 @@ class BaseClassifier(BasePanelMixin):
         self._is_vectorized = isinstance(y, VectorizedDF)
 
         if self._is_vectorized:
-            self._vectorize("fit", X=X, y=y, X_val=X_val, y_val=y_val)
+            self._vectorize(
+                "fit",
+                X=X,
+                y=y,
+                X_val=X_val,
+                y_val=y_val,
+                target_dict=target_dict,
+                **kwargs,
+            )
             # fit timer end
             self.fit_time_ = int(round(time.time() * 1000)) - start
             # this should happen last: fitted state is set to True
@@ -299,12 +313,19 @@ class BaseClassifier(BasePanelMixin):
                 )
                 warn(msg, obj=self)
 
-        # remember class labels
-        self.classes_ = np.unique(y)
-        self.n_classes_ = self.classes_.shape[0]
-        self._class_dictionary = {}
-        for index, class_val in enumerate(self.classes_):
-            self._class_dictionary[class_val] = index
+        # define class labels
+        if target_dict is None:
+            labels_unique = sorted(
+                np.unique(np.concatenate([y, y_val]) if y_val is not None else y)
+            )
+            self._class_dictionary = {
+                k: v for k, v in zip(labels_unique, np.arange(len(labels_unique)))
+            }
+        else:
+            self._class_dictionary = target_dict
+
+        self.classes_ = list(self._class_dictionary.keys())
+        self.n_classes_ = len(self._class_dictionary)
 
         # escape early and do not fit if only one class label has been seen
         #   in this case, we later predict the single class label seen
