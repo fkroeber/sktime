@@ -11,6 +11,7 @@ import os
 from abc import abstractmethod
 from copy import deepcopy
 
+import keras
 import numpy as np
 import tensorflow as tf
 from sklearn.preprocessing import OneHotEncoder
@@ -19,6 +20,7 @@ from sklearn.utils import check_random_state
 from sktime.base._base import SERIALIZATION_FORMATS
 from sktime.classification.base import BaseClassifier
 from sktime.utils.dependencies import _check_soft_dependencies
+from tensorflow.keras.callbacks import ModelCheckpoint
 
 
 class BaseDeepClassifier(BaseClassifier):
@@ -126,6 +128,14 @@ class BaseDeepClassifier(BaseClassifier):
             callbacks=self.callbacks,
             **kwargs,
         )
+
+        # check callbacks for checkpoints
+        ckpt_callback = [isinstance(cbk, ModelCheckpoint) for cbk in self.callbacks]
+        if any(ckpt_callback):
+            cbk = self.callbacks[ckpt_callback.index(True)]
+            self.model_ = keras.models.load_model(cbk.filepath)
+            print(f"Restored model from best metric: {cbk.best}")
+
         return self
 
     def _predict(self, X, **kwargs):
