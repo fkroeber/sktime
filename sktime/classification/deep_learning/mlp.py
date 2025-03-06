@@ -21,6 +21,8 @@ class MLPClassifier(BaseDeepClassifier):
         the number of epochs to train the model
     batch_size      : int, default = 16
         the number of samples per gradient update.
+    pred_batch_size : int, default = None (= batch_size)
+        the number of samples per val/test prediction batch.
     random_state    : int or None, default=None
         Seed for random number generation.
     verbose         : boolean, default = False
@@ -67,6 +69,7 @@ class MLPClassifier(BaseDeepClassifier):
         self,
         n_epochs=2000,
         batch_size=16,
+        pred_batch_size=None,
         callbacks=None,
         verbose=False,
         loss="categorical_crossentropy",
@@ -81,6 +84,7 @@ class MLPClassifier(BaseDeepClassifier):
         self.callbacks = callbacks
         self.n_epochs = n_epochs
         self.batch_size = batch_size
+        self.pred_batch_size = pred_batch_size or batch_size
         self.verbose = verbose
         self.loss = loss
         self.metrics = metrics

@@ -48,6 +48,7 @@ class BaseDeepClassifierPytorch(BaseClassifier):
         self,
         num_epochs=16,
         batch_size=8,
+        pred_batch_size=None,
         criterion=None,
         criterion_kwargs=None,
         optimizer=None,
@@ -61,6 +62,7 @@ class BaseDeepClassifierPytorch(BaseClassifier):
     ):
         self.num_epochs = num_epochs
         self.batch_size = batch_size
+        self.pred_batch_size = pred_batch_size
         self.criterion = criterion
         self.criterion_kwargs = criterion_kwargs
         self.optimizer = optimizer
@@ -163,9 +165,11 @@ class BaseDeepClassifierPytorch(BaseClassifier):
             y_val = self._encode_y(y_val)
 
         # build dataloaders
-        train_dataloader = self._build_dataloader(X, y)
+        train_dataloader = self._build_dataloader(X, y, batch_size=self.batch_size)
         val_dataloader = (
-            self._build_dataloader(X_val, y_val) if X_val is not None else None
+            self._build_dataloader(X_val, y_val, batch_size=self.pred_batch_size)
+            if X_val is not None
+            else None
         )
 
         # instantiate the torch network & lightning module
@@ -223,11 +227,11 @@ class BaseDeepClassifierPytorch(BaseClassifier):
     def _build_network(self):
         pass
 
-    def _build_dataloader(self, X, y=None):
+    def _build_dataloader(self, X, y=None, batch_size=1):
         # default behaviour if estimator doesnot implement
         # dataloader of its own
         dataset = PytorchDataset(X, y)
-        return DataLoader(dataset, self.batch_size)
+        return DataLoader(dataset, batch_size)
 
     def _predict(self, X):
         """Predict labels for sequences in X.
@@ -291,7 +295,7 @@ class BaseDeepClassifierPytorch(BaseClassifier):
             2nd dimension indices correspond to possible labels (integers)
             (i, j)-th entry is predictive probability that i-th instance is of class j
         """
-        test_dataloader = self._build_dataloader(X)
+        test_dataloader = self._build_dataloader(X, batch_size=self.pred_batch_size)
         trainer = pl.Trainer()
         outputs = trainer.predict(
             self.model,

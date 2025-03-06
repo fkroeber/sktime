@@ -21,6 +21,8 @@ class MCDCNNClassifier(BaseDeepClassifier):
         The number of epochs to train the model.
     batch_size : int, optional (default=16)
         The number of samples per gradient update.
+    pred_batch_size : int, default = None (= batch_size)
+        the number of samples per val/test prediction batch.
     kernel_size : int, optional (default=5)
         The size of kernel in Conv1D layer.
     pool_size : int, optional (default=2)
@@ -86,6 +88,7 @@ class MCDCNNClassifier(BaseDeepClassifier):
         self,
         n_epochs=120,
         batch_size=16,
+        pred_batch_size=None,
         kernel_size=5,
         pool_size=2,
         filter_sizes=(8, 8),
@@ -105,6 +108,7 @@ class MCDCNNClassifier(BaseDeepClassifier):
 
         self.n_epochs = n_epochs
         self.batch_size = batch_size
+        self.pred_batch_size = pred_batch_size or batch_size
         self.kernel_size = kernel_size
         self.pool_size = pool_size
         self.filter_sizes = filter_sizes

@@ -22,6 +22,8 @@ class CNTCClassifier(BaseDeepClassifier):
         the number of epochs to train the model
     batch_size      : int, default = 16
         the number of samples per gradient update.
+    pred_batch_size : int, default = None (= batch_size)
+        the number of samples per val/test prediction batch.
     filter_sizes    : tuple of shape (2), default = (16, 8)
         filter sizes for CNNs in CCNN arm.
     kernel_sizes     : two-tuple, default = (1, 1)
@@ -87,6 +89,7 @@ class CNTCClassifier(BaseDeepClassifier):
         self,
         n_epochs=2000,
         batch_size=16,
+        pred_batch_size=None,
         filter_sizes=(16, 8),
         kernel_sizes=(1, 1),
         rnn_size=64,
@@ -108,6 +111,7 @@ class CNTCClassifier(BaseDeepClassifier):
         self.callbacks = callbacks
         self.n_epochs = n_epochs
         self.batch_size = batch_size
+        self.pred_batch_size = pred_batch_size or batch_size
         self.verbose = verbose
         self.loss = loss
         self.metrics = metrics

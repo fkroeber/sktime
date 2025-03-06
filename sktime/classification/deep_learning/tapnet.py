@@ -33,6 +33,8 @@ class TapNetClassifier(BaseDeepClassifier):
         number of epochs to train the model
     batch_size          : int, default = 16
         number of samples per update
+    pred_batch_size : int, default = None (= batch_size)
+        the number of samples per val/test prediction batch.
     dropout             : float, default = 0.5
         dropout rate, in the range [0, 1)
     dilation            : int, default = 1
@@ -94,6 +96,7 @@ class TapNetClassifier(BaseDeepClassifier):
         self,
         n_epochs=2000,
         batch_size=16,
+        pred_batch_size=None,
         dropout=0.5,
         filter_sizes=(256, 256, 128),
         kernel_size=(8, 5, 3),
@@ -117,6 +120,7 @@ class TapNetClassifier(BaseDeepClassifier):
         _check_dl_dependencies(severity="error")
 
         self.batch_size = batch_size
+        self.pred_batch_size = pred_batch_size or batch_size
         self.random_state = random_state
         self.kernel_size = kernel_size
         self.layers = layers

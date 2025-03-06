@@ -20,6 +20,8 @@ class LSTMFCNClassifier(BaseDeepClassifier):
      the number of epochs to train the model
     batch_size: int, default=128
         the number of samples per gradient update.
+    pred_batch_size : int, default = None (= batch_size)
+        the number of samples per val/test prediction batch.
     dropout: float, default=0.8
         controls dropout rate of LSTM layer
     kernel_sizes: list of ints, default=[8, 5, 3]
@@ -73,6 +75,7 @@ class LSTMFCNClassifier(BaseDeepClassifier):
         self,
         n_epochs=2000,
         batch_size=128,
+        pred_batch_size=None,
         dropout=0.8,
         kernel_sizes=(8, 5, 3),
         filter_sizes=(128, 256, 128),
@@ -85,6 +88,7 @@ class LSTMFCNClassifier(BaseDeepClassifier):
         # predefined
         self.n_epochs = n_epochs
         self.batch_size = batch_size
+        self.pred_batch_size = pred_batch_size or batch_size
         self.kernel_sizes = kernel_sizes
         self.filter_sizes = filter_sizes
         self.lstm_size = lstm_size

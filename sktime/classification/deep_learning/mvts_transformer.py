@@ -54,6 +54,8 @@ class MVTSTransformerClassifier(BaseDeepClassifierPytorch):
         The number of epochs to train the model.
     batch_size : int, optional (default=8)
         The size of each mini-batch during training.
+    pred_batch_size : int, default = None (= batch_size)
+        the number of samples per val/test prediction batch.
     criterion : callable, optional (default=None)
         The loss function to use. If None, CrossEntropyLoss will be used.
     criterion_kwargs : dict, optional (default=None)
@@ -109,6 +111,7 @@ class MVTSTransformerClassifier(BaseDeepClassifierPytorch):
         # base classifier specific
         num_epochs=10,
         batch_size=8,
+        pred_batch_size=None,
         criterion=None,
         criterion_kwargs=None,
         optimizer=None,
@@ -131,6 +134,7 @@ class MVTSTransformerClassifier(BaseDeepClassifierPytorch):
         self.freeze = freeze
         self.num_epochs = num_epochs
         self.batch_size = batch_size
+        self.pred_batch_size = pred_batch_size or batch_size
         self.criterion = criterion
         self.criterion_kwargs = criterion_kwargs
         self.optimizer = optimizer
@@ -150,6 +154,7 @@ class MVTSTransformerClassifier(BaseDeepClassifierPytorch):
         super().__init__(
             num_epochs=num_epochs,
             batch_size=batch_size,
+            pred_batch_size=pred_batch_size,
             criterion=criterion,
             criterion_kwargs=criterion_kwargs,
             optimizer=optimizer,
@@ -202,9 +207,9 @@ class MVTSTransformerClassifier(BaseDeepClassifierPytorch):
             freeze=self.freeze,
         )
 
-    def _build_dataloader(self, X, y=None):
+    def _build_dataloader(self, X, y=None, batch_size=1):
         dataset = PytorchDataset(X, y)
-        return DataLoader(dataset, self.batch_size)
+        return DataLoader(dataset, batch_size)
 
     @classmethod
     def get_test_params(cls, parameter_set="default"):

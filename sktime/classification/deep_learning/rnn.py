@@ -22,6 +22,8 @@ class SimpleRNNClassifier(BaseDeepClassifier):
         the number of epochs to train the model
     batch_size : int, default = 1
         the number of samples per gradient update.
+    pred_batch_size : int, default = None (= batch_size)
+        the number of samples per val/test prediction batch.
     units : int, default = 6
         number of units in the network
     callbacks : list of tf.keras.callbacks.Callback objects, default = None
@@ -67,6 +69,7 @@ class SimpleRNNClassifier(BaseDeepClassifier):
         self,
         n_epochs=100,
         batch_size=1,
+        pred_batch_size=None,
         units=6,
         callbacks=None,
         random_state=0,
@@ -80,6 +83,7 @@ class SimpleRNNClassifier(BaseDeepClassifier):
         _check_dl_dependencies(severity="error")
 
         self.batch_size = batch_size
+        self.pred_batch_size = pred_batch_size or batch_size
         self.n_epochs = n_epochs
         self.verbose = verbose
         self.units = units

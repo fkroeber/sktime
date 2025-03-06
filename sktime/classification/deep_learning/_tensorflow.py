@@ -119,6 +119,7 @@ class BaseDeepClassifier(BaseClassifier):
             X,
             y_onehot,
             batch_size=self.batch_size,
+            validation_batch_size=self.pred_batch_size,
             epochs=self.n_epochs,
             verbose=self.verbose,
             validation_data=validation_data,
@@ -147,7 +148,7 @@ class BaseDeepClassifier(BaseClassifier):
         """
         # Transpose to work correctly with keras
         X = self._prepare_data(X)
-        probs = self.model_.predict(X, self.batch_size, **kwargs)
+        probs = self.model_.predict(X, self.pred_batch_size, **kwargs)
 
         # check if binary classification
         if probs.shape[1] == 1:

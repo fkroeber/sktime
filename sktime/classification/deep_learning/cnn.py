@@ -20,6 +20,8 @@ class CNNClassifier(BaseDeepClassifier):
         the number of epochs to train the model
     batch_size      : int, default = 16
         the number of samples per gradient update.
+    pred_batch_size : int, default = None (= batch_size)
+        the number of samples per val/test prediction batch.
     kernel_size     : int, default = 7
         the length of the 1D convolution window
     avg_pool_size   : int, default = 3
@@ -80,6 +82,7 @@ class CNNClassifier(BaseDeepClassifier):
         self,
         n_epochs=2000,
         batch_size=16,
+        pred_batch_size=None,
         kernel_size=7,
         avg_pool_size=3,
         n_conv_layers=2,
@@ -97,12 +100,12 @@ class CNNClassifier(BaseDeepClassifier):
         _check_dl_dependencies(severity="error")
 
         self.batch_size = batch_size
+        self.pred_batch_size = pred_batch_size or batch_size
         self.n_conv_layers = n_conv_layers
         self.avg_pool_size = avg_pool_size
         self.kernel_size = kernel_size
         self.callbacks = callbacks
         self.n_epochs = n_epochs
-        self.batch_size = batch_size
         self.verbose = verbose
         self.loss = loss
         self.metrics = metrics

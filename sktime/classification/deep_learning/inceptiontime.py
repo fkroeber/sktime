@@ -34,6 +34,8 @@ class InceptionTimeClassifier(BaseDeepClassifier):
     n_epochs : int, default=1500
     batch_size : int, default=64
         the number of samples per gradient update
+    pred_batch_size : int, default = None (= batch_size)
+        the number of samples per val/test prediction batch.
     kernel_size : int, default=40
         specifying the length of the 1D convolution window
     n_filters : int, default=32
@@ -93,6 +95,7 @@ class InceptionTimeClassifier(BaseDeepClassifier):
         self,
         n_epochs=1500,
         batch_size=64,
+        pred_batch_size=None,
         kernel_size=40,
         n_filters=32,
         use_residual=True,
@@ -109,6 +112,7 @@ class InceptionTimeClassifier(BaseDeepClassifier):
 
         # predefined
         self.batch_size = batch_size
+        self.pred_batch_size = pred_batch_size or batch_size
         self.bottleneck_size = bottleneck_size
         self.callbacks = callbacks
         self.depth = depth

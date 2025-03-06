@@ -16,6 +16,8 @@ class MACNNClassifier(BaseDeepClassifier):
         The number of epochs to train the model.
     batch_size : int, optional (default=4)
         The number of sample per gradient update.
+    pred_batch_size : int, default = None (= batch_size)
+        the number of samples per val/test prediction batch.
     padding : str, optional (default="same")
         The type of padding to be provided in MACNN Blocks. Accepts
         all the string values that keras.layers supports.
@@ -86,6 +88,7 @@ class MACNNClassifier(BaseDeepClassifier):
         self,
         n_epochs=1500,
         batch_size=4,
+        pred_batch_size=None,
         padding="same",
         pool_size=3,
         strides=2,
@@ -106,6 +109,7 @@ class MACNNClassifier(BaseDeepClassifier):
 
         self.n_epochs = n_epochs
         self.batch_size = batch_size
+        self.pred_batch_size = pred_batch_size or batch_size
         self.padding = padding
         self.pool_size = pool_size
         self.strides = strides

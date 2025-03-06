@@ -20,6 +20,8 @@ class ResNetClassifier(BaseDeepClassifier):
         the number of epochs to train the model
     batch_size      : int, default = 16
         the number of samples per gradient update.
+    pred_batch_size : int, default = None (= batch_size)
+        the number of samples per val/test prediction batch.
     random_state    : int or None, default=None
         Seed for random number generation.
     verbose         : boolean, default = False
@@ -71,6 +73,7 @@ class ResNetClassifier(BaseDeepClassifier):
         loss="categorical_crossentropy",
         metrics=None,
         batch_size=16,
+        pred_batch_size=None,
         random_state=None,
         activation="sigmoid",
         use_bias=True,
@@ -84,6 +87,7 @@ class ResNetClassifier(BaseDeepClassifier):
         self.loss = loss
         self.metrics = metrics
         self.batch_size = batch_size
+        self.pred_batch_size = pred_batch_size or batch_size
         self.random_state = random_state
         self.activation = activation
         self.use_bias = use_bias

@@ -41,6 +41,8 @@ class GRUClassifier(BaseDeepClassifierPytorch):
         The activation function to use. Options: ["relu", "softmax"].
     batch_size : int, optional (default=8)
         The size of each mini-batch during training.
+    pred_batch_size : int, default = None (= batch_size)
+        the number of samples per val/test prediction batch.
     criterion : callable, optional (default=None)
         The loss function to use. If None, CrossEntropyLoss will be used.
     criterion_kwargs : dict, optional (default=None)
@@ -94,6 +96,7 @@ class GRUClassifier(BaseDeepClassifierPytorch):
         # base classifier specific
         num_epochs: int = 10,
         batch_size: int = 8,
+        pred_batch_size: int = None,
         optimizer: str = None,
         criterion: str = None,
         criterion_kwargs: dict = None,
@@ -115,6 +118,7 @@ class GRUClassifier(BaseDeepClassifierPytorch):
         self.bidirectional = bidirectional
         self.num_epochs = num_epochs
         self.batch_size = batch_size
+        self.pred_batch_size = pred_batch_size or batch_size
         self.criterion = criterion
         self.criterion_kwargs = criterion_kwargs
         self.optimizer = optimizer
@@ -135,6 +139,7 @@ class GRUClassifier(BaseDeepClassifierPytorch):
             optimizer=optimizer,
             criterion=criterion,
             batch_size=batch_size,
+            pred_batch_size=pred_batch_size,
             criterion_kwargs=criterion_kwargs,
             optimizer_kwargs=optimizer_kwargs,
             lr=lr,
@@ -261,6 +266,8 @@ class GRUFCNNClassifier(BaseDeepClassifierPytorch):
         The activation function to use. Options: ["relu", "softmax"].
     batch_size : int, optional (default=8)
         The size of each mini-batch during training.
+    pred_batch_size : int, default = None (= batch_size)
+        the number of samples per val/test prediction batch.
     criterion : callable, optional (default=None)
         The loss function to use. If None, CrossEntropyLoss will be used.
     criterion_kwargs : dict, optional (default=None)
@@ -313,6 +320,7 @@ class GRUFCNNClassifier(BaseDeepClassifierPytorch):
         # base classifier specific
         num_epochs: int = 10,
         batch_size: int = 8,
+        pred_batch_size: int = None,
         optimizer: str = "Adam",
         criterion: str = None,
         criterion_kwargs: dict = None,
@@ -336,6 +344,7 @@ class GRUFCNNClassifier(BaseDeepClassifierPytorch):
         self.kernel_sizes = kernel_sizes
         self.num_epochs = num_epochs
         self.batch_size = batch_size
+        self.pred_batch_size = pred_batch_size or batch_size
         self.criterion = criterion
         self.criterion_kwargs = criterion_kwargs
         self.optimizer = optimizer
@@ -356,6 +365,7 @@ class GRUFCNNClassifier(BaseDeepClassifierPytorch):
             optimizer=optimizer,
             criterion=criterion,
             batch_size=batch_size,
+            pred_batch_size=pred_batch_size,
             criterion_kwargs=criterion_kwargs,
             optimizer_kwargs=optimizer_kwargs,
             lr=lr,
