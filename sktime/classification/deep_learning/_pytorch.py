@@ -156,7 +156,7 @@ class BaseDeepClassifierPytorch(BaseClassifier):
             self.lr_scheduler_kwargs,
         )
 
-    def _fit(self, X, y, X_val=None, y_val=None):
+    def _fit(self, X, y, X_val=None, y_val=None, **kwargs):
         # encode y
         y = self._encode_y(y)
         if y_val is not None:
@@ -177,6 +177,7 @@ class BaseDeepClassifierPytorch(BaseClassifier):
             max_epochs=self.num_epochs,
             callbacks=self.callbacks,
             enable_progress_bar=self.verbose,
+            **kwargs,
         )
         trainer.fit(
             self.model,
