@@ -48,6 +48,8 @@ class InceptionTimeClassifier(BaseDeepClassifier):
         random seed for internal random number generator
     verbose: boolean, default=False
         whether to print runtime information
+    optimizer : keras.optimizers object, default = Adam(lr=0.01)
+        specify the optimizer and the learning rate to be used.
     loss: str, default="categorical_crossentropy"
     metrics: optional
 
@@ -107,6 +109,7 @@ class InceptionTimeClassifier(BaseDeepClassifier):
         verbose=False,
         loss="categorical_crossentropy",
         metrics=None,
+        optimizer=None,
     ):
         _check_dl_dependencies(severity="error")
 
@@ -125,6 +128,7 @@ class InceptionTimeClassifier(BaseDeepClassifier):
         self.use_bottleneck = use_bottleneck
         self.use_residual = use_residual
         self.verbose = verbose
+        self.optimizer = optimizer
 
         super().__init__()
 
@@ -169,9 +173,15 @@ class InceptionTimeClassifier(BaseDeepClassifier):
         else:
             metrics = self.metrics
 
+        self.optimizer_ = (
+            keras.optimizers.Adam(learning_rate=0.01)
+            if self.optimizer is None
+            else self.optimizer
+        )
+
         model.compile(
             loss=self.loss,
-            optimizer=keras.optimizers.Adam(),
+            optimizer=self.optimizer_,
             metrics=metrics,
         )
 

@@ -99,6 +99,7 @@ class CNTCClassifier(BaseDeepClassifier):
         verbose=False,
         loss="categorical_crossentropy",
         metrics=None,
+        optimizer=None,
         random_state=0,
     ):
         _check_dl_dependencies(severity="error")
@@ -116,6 +117,7 @@ class CNTCClassifier(BaseDeepClassifier):
         self.loss = loss
         self.metrics = metrics
         self.random_state = random_state
+        self.optimizer = optimizer
 
         super().__init__()
 
@@ -147,10 +149,16 @@ class CNTCClassifier(BaseDeepClassifier):
             output_layer
         )
 
+        self.optimizer_ = (
+            keras.optimizers.Adam(learning_rate=0.01)
+            if self.optimizer is None
+            else self.optimizer
+        )
+
         model = keras.models.Model(inputs=input_layer, outputs=output_layer)
         model.compile(
             loss=self.loss,
-            optimizer=keras.optimizers.Adam(),
+            optimizer=self.optimizer_,
             metrics=metrics,
         )
         return model

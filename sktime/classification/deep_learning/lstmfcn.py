@@ -35,6 +35,8 @@ class LSTMFCNClassifier(BaseDeepClassifier):
     callbacks: keras callbacks, default=ReduceLRonPlateau
         Keras callbacks to use such as learning rate reduction or saving best model
         based on validation error
+    optimizer : keras.optimizers object, default = Adam(lr=0.01)
+        specify the optimizer and the learning rate to be used.
     verbose: 'auto', 0, 1, or 2. Verbosity mode.
         0 = silent, 1 = progress bar, 2 = one line per epoch.
         'auto' defaults to 1 for most cases, but 2 when used with
@@ -81,6 +83,9 @@ class LSTMFCNClassifier(BaseDeepClassifier):
         filter_sizes=(128, 256, 128),
         lstm_size=8,
         attention=False,
+        loss="categorical_crossentropy",
+        metrics=None,
+        optimizer=None,
         callbacks=None,
         random_state=None,
         verbose=0,
@@ -94,7 +99,9 @@ class LSTMFCNClassifier(BaseDeepClassifier):
         self.lstm_size = lstm_size
         self.dropout = dropout
         self.attention = attention
-
+        self.optimizer = optimizer
+        self.loss = loss
+        self.metrics = metrics
         self.callbacks = callbacks
         self.random_state = random_state
         self.verbose = verbose
@@ -138,11 +145,23 @@ class LSTMFCNClassifier(BaseDeepClassifier):
 
         model = keras.models.Model(inputs=input_layers, outputs=output_layer)
 
-        model.compile(
-            loss="categorical_crossentropy",
-            optimizer="adam",
-            metrics=["accuracy"],
+        if self.metrics is None:
+            metrics = ["accuracy"]
+        else:
+            metrics = self.metrics
+
+        self.optimizer_ = (
+            keras.optimizers.Adam(learning_rate=0.01)
+            if self.optimizer is None
+            else self.optimizer
         )
+
+        model.compile(
+            loss=self.loss,
+            optimizer=self.optimizer_,
+            metrics=metrics,
+        )
+
         # .get_params() returns an empty list for callback.
         # inconsistent with function initial run where callbacks was set to None
         self._callbacks = self.callbacks or None
