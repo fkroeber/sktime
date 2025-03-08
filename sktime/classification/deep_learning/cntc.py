@@ -3,8 +3,6 @@
 __author__ = ["James-Large", "TonyBagnall", "AurumnPegasus"]
 __all__ = ["CNTCClassifier"]
 
-from sklearn.utils import check_random_state
-
 from sktime.classification.deep_learning._tensorflow import BaseDeepClassifier
 from sktime.networks.cntc import CNTCNetwork
 from sktime.utils.dependencies import _check_dl_dependencies
@@ -162,18 +160,6 @@ class CNTCClassifier(BaseDeepClassifier):
             metrics=metrics,
         )
         return model
-
-    def _predict(self, X, **kwargs):
-        import numpy as np
-
-        probs = self._predict_proba(X, **kwargs)
-        rng = check_random_state(self.random_state)
-        return np.array(
-            [
-                self.classes_[int(rng.choice(np.flatnonzero(prob == prob.max())))]
-                for prob in probs
-            ]
-        )
 
     def _prepare_data(self, X):
         """
