@@ -91,12 +91,12 @@ class MACNNNetwork(BaseDeepNetwork):
         x1 = keras.layers.BatchNormalization()(x1)
         x1 = keras.layers.Activation("relu")(x1)
 
-        x2 = keras.layers.Lambda(lambda y: keras.backend.mean(y, axis=1))(x1)
+        x2 = keras.layers.GlobalAveragePooling1D()(x1)
         x2 = keras.layers.Dense(
             units=int(kernels * 3 / reduce), use_bias=False, activation="relu"
         )(x2)
         x2 = keras.layers.Dense(
-            units=int(kernels * 3), use_bias=False, activation="relu"
+            units=int(kernels * 3), use_bias=False, activation="sigmoid"
         )(x2)
         x2 = keras.layers.RepeatVector(x1.shape[1])(x2)
 
