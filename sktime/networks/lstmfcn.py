@@ -82,7 +82,7 @@ class LSTMFCNNetwork(BaseDeepNetwork):
         input_layer = keras.layers.Input(shape=input_shape)
 
         x = keras.layers.Permute((2, 1))(input_layer)
-
+        x = keras.layers.Masking()(x)
         if self.attention:
             AttentionLSTM = make_attention_lstm()
             x = AttentionLSTM(self.lstm_size)(x)
@@ -99,6 +99,7 @@ class LSTMFCNNetwork(BaseDeepNetwork):
         )(input_layer)
         y = keras.layers.BatchNormalization()(y)
         y = keras.layers.Activation("relu")(y)
+        y = self.squeeze_excite_block(y)
 
         y = keras.layers.Conv1D(
             self.filter_sizes[1],
@@ -108,6 +109,7 @@ class LSTMFCNNetwork(BaseDeepNetwork):
         )(y)
         y = keras.layers.BatchNormalization()(y)
         y = keras.layers.Activation("relu")(y)
+        y = self.squeeze_excite_block(y)
 
         y = keras.layers.Conv1D(
             self.filter_sizes[2],
@@ -123,6 +125,24 @@ class LSTMFCNNetwork(BaseDeepNetwork):
         output_layer = keras.layers.concatenate([x, y])
 
         return input_layer, output_layer
+
+    def squeeze_excite_block(self, input):
+        ''' Create a squeeze-excite block
+        Args:
+            input: input tensor
+            filters: number of output filters
+            k: width factor
+
+        Returns: a keras tensor
+        '''
+        from tensorflow import keras
+        filters = input.shape[-1]  # channel_axis = -1 for TF
+        se = keras.layers.GlobalAveragePooling1D()(input)
+        se = keras.layers.Reshape((1, filters))(se)
+        se = keras.layers.Dense(filters // 16,  activation='relu', kernel_initializer='he_normal', use_bias=False)(se)
+        se = keras.layers.Dense(filters, activation='sigmoid', kernel_initializer='he_normal', use_bias=False)(se)
+        se = keras.layers.multiply([input, se])
+        return se
 
     @classmethod
     def get_test_params(cls, parameter_set="default"):
