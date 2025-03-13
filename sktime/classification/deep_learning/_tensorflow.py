@@ -20,7 +20,6 @@ from sklearn.utils import check_random_state
 from sktime.base._base import SERIALIZATION_FORMATS
 from sktime.classification.base import BaseClassifier
 from sktime.utils.dependencies import _check_soft_dependencies
-from tensorflow.keras.callbacks import ModelCheckpoint
 
 
 class BaseDeepClassifier(BaseClassifier):
@@ -130,7 +129,7 @@ class BaseDeepClassifier(BaseClassifier):
         )
 
         # check callbacks for checkpoints
-        ckpt_callback = [isinstance(cbk, ModelCheckpoint) for cbk in self.callbacks]
+        ckpt_callback = [isinstance(cbk, keras.callbacks.ModelCheckpoint) for cbk in self.callbacks]
         if any(ckpt_callback):
             cbk = self.callbacks[ckpt_callback.index(True)]
             self.model_ = keras.models.load_model(cbk.filepath)
