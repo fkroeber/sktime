@@ -116,7 +116,7 @@ class BaggingClassifier(BaseClassifier):
             tags_to_clone = ["capability:multivariate", "capability:missing_values"]
         self.clone_tags(estimator, tags_to_clone)
 
-    def _fit(self, X, y, X_val=None, y_val=None):
+    def _fit(self, X, y, X_val=None, y_val=None, **kwargs):
         """Fit time series classifier to training data.
 
         Parameters
@@ -139,6 +139,7 @@ class BaggingClassifier(BaseClassifier):
             for specifications, see examples/AA_datatypes_and_datasets.ipynb
         y_val : 1D np.array of int, of shape [n_instances] - class labels for validation
             indices correspond to instance indices in X
+        **kwargs : additional fitting parameters
 
         Returns
         -------
@@ -181,18 +182,22 @@ class BaggingClassifier(BaseClassifier):
             col_ix_i = _random_ss_ix(col_ix, size=n_features_, replace=bootstrap_ft)
             # if we bootstrap, we need to take care to ensure the
             # indices end up unique
-            if not isinstance(X.index, pd.MultiIndex):
-                Xi = X.loc[inst_ix_i, col_ix_i]
-                Xi = Xi.reset_index(drop=True)
-                if X_val is not None:
-                    X_val = X.loc[:, col_ix_i]
-                    X_val = X_val.reset_index(drop=True)
+            if bootstrap or bootstrap_ft:
+                if not isinstance(X.index, pd.MultiIndex):
+                    Xi = X.loc[inst_ix_i, col_ix_i]
+                    Xi = Xi.reset_index(drop=True)
+                    if X_val is not None:
+                        X_val = X.loc[:, col_ix_i]
+                        X_val = X_val.reset_index(drop=True)
+                else:
+                    Xis = [X.loc[[ix], col_ix_i].droplevel(0) for ix in inst_ix_i]
+                    Xi = pd.concat(Xis, keys=pd.RangeIndex(len(inst_ix_i)))
+                    if X_val is not None:
+                        X_val = X_val.loc[:, col_ix_i]
             else:
-                Xis = [X.loc[[ix], col_ix_i].droplevel(0) for ix in inst_ix_i]
-                Xi = pd.concat(Xis, keys=pd.RangeIndex(len(inst_ix_i)))
+                Xi = X.loc[inst_ix_i, col_ix_i]
                 if X_val is not None:
                     X_val = X_val.loc[:, col_ix_i]
-
             if bootstrap_ft:
                 Xi.columns = pd.RangeIndex(len(col_ix_i))
                 if X_val is not None:
@@ -200,9 +205,9 @@ class BaggingClassifier(BaseClassifier):
 
             yi = y[row_ss]
             if y_val is not None:
-                self.estimators_ += [esti.fit(Xi, yi, X_val, y_val)]
+                self.estimators_ += [esti.fit(Xi, yi, X_val, y_val, **kwargs)]
             else:
-                self.estimators_ += [esti.fit(Xi, yi)]
+                self.estimators_ += [esti.fit(Xi, yi, **kwargs)]
             self._col_ixis += [col_ix_i]
 
         return self
@@ -295,6 +300,9 @@ class BaggingClassifier(BaseClassifier):
 
 
 def _random_ss_ix(ix, size, replace=True):
-    a = range(len(ix))
-    ixs = ix[np.random.choice(a, size=size, replace=replace)]
-    return ixs
+    if size == len(ix) and not replace:
+        return ix
+    else:
+        a = range(len(ix))
+        ixs = ix[np.random.choice(a, size=size, replace=replace)]
+        return ixs
