@@ -178,6 +178,7 @@ class MVTSTransformerClassifier(BaseDeepClassifierPytorch):
                 "Adadelta": torch.optim.Adadelta,
                 "Adagrad": torch.optim.Adagrad,
                 "Adam": torch.optim.Adam,
+                "RAdam": torch.optim.RAdam,
                 "AdamW": torch.optim.AdamW,
                 "SGD": torch.optim.SGD,
             }
