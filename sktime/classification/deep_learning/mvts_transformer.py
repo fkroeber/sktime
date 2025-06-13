@@ -207,9 +207,9 @@ class MVTSTransformerClassifier(BaseDeepClassifierPytorch):
             freeze=self.freeze,
         )
 
-    def _build_dataloader(self, X, y=None, batch_size=1):
+    def _build_dataloader(self, X, y=None, batch_size=1, shuffle=True):
         dataset = PytorchDataset(X, y)
-        return DataLoader(dataset, batch_size)
+        return DataLoader(dataset, batch_size, shuffle)
 
     @classmethod
     def get_test_params(cls, parameter_set="default"):
