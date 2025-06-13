@@ -268,15 +268,10 @@ class BaseDeepClassifierPytorch(BaseClassifier):
 
     def _instantiate_criterion(self):
         if self.criterion:
-            if self.criterion in self.criterions.keys():
-                if self.criterion_kwargs:
-                    return self.criterions[self.criterion](**self.criterion_kwargs)
-                else:
-                    return self.criterions[self.criterion]()
+            if self.criterion_kwargs:
+                return self.criterion(**self.criterion_kwargs)
             else:
-                raise TypeError(
-                    f"Please pass one of {self.criterions.keys()} for `criterion`."
-                )
+                return self.criterion
         else:
             # default criterion
             return torch.nn.CrossEntropyLoss()
