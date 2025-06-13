@@ -182,6 +182,10 @@ class BaseDeepClassifier(BaseClassifier):
         """
         # Transpose to work correctly with keras
         X = self._prepare_data(X)
+        # The following is the slow part of sktime
+        # Takes approx. 95% of the time
+        # Convert_to_tensor if not explictly called, internally called by .predict
+        X = tf.convert_to_tensor(X)
         probs = self.model_.predict(X, self.pred_batch_size, **kwargs)
 
         # check if binary classification
