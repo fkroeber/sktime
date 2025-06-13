@@ -73,7 +73,7 @@ class BaseDeepClassifier(BaseClassifier):
         """
         return self.history.history if self.history is not None else None
 
-    def _fit(self, X, y, X_val=None, y_val=None, **kwargs):
+    def _fit(self, X, y, X_val=None, y_val=None, skip_setup=False, **kwargs):
         """Fit the classifier on the training set (X, y).
 
         Parameters
@@ -86,6 +86,7 @@ class BaseDeepClassifier(BaseClassifier):
             The validation input samples.
         y_val : np.ndarray of shape n
             The validation data class labels.
+        skip_setup : bool, default = False
         **kwargs : additional fitting parameters
 
         Returns
@@ -108,28 +109,32 @@ class BaseDeepClassifier(BaseClassifier):
             validation_data = None
 
         # initialise model and callbacks
-        check_random_state(self.random_state)
-        self.model_ = self.build_model(self.input_shape, self.n_classes_)
+        if not skip_setup:
+            check_random_state(self.random_state)
+            self.model_ = self.build_model(self.input_shape, self.n_classes_)
         self._configure_callbacks()
 
         if self.verbose:
             self.model_.summary()
 
         # fit model
-        self.history = self.model_.fit(
-            X,
-            y_onehot,
-            batch_size=self.batch_size,
-            validation_batch_size=self.pred_batch_size,
-            epochs=self.n_epochs,
-            verbose=self.verbose,
-            validation_data=validation_data,
-            callbacks=self.callbacks,
-            **kwargs,
-        )
+        if self.n_epochs:
+            self.history = self.model_.fit(
+                X,
+                y_onehot,
+                batch_size=self.batch_size,
+                validation_batch_size=self.pred_batch_size,
+                epochs=self.n_epochs,
+                verbose=self.verbose,
+                validation_data=validation_data,
+                callbacks=self.callbacks,
+                **kwargs,
+            )
 
         # check callbacks for checkpoints
-        ckpt_callback = [isinstance(cbk, keras.callbacks.ModelCheckpoint) for cbk in self.callbacks]
+        ckpt_callback = [
+            isinstance(cbk, keras.callbacks.ModelCheckpoint) for cbk in self.callbacks
+        ]
         if any(ckpt_callback):
             cbk = self.callbacks[ckpt_callback.index(True)]
             self.model_ = keras.models.load_model(cbk.filepath)
