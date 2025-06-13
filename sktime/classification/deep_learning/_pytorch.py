@@ -10,6 +10,7 @@ import abc
 import numpy as np
 import pytorch_lightning as pl
 import torch.nn.functional as F
+import torchmetrics
 
 from sktime.classification.base import BaseClassifier
 from sktime.utils.dependencies import _check_soft_dependencies
@@ -88,7 +89,13 @@ class BaseDeepClassifierPytorch(BaseClassifier):
 
         class LitNetwork(pl.LightningModule):
             def __init__(
-                self, network, criterion, optimizer, lr_scheduler, lr_scheduler_kwargs
+                self,
+                network,
+                criterion,
+                optimizer,
+                lr_scheduler,
+                lr_scheduler_kwargs,
+                num_classes,
             ):
                 super().__init__()
                 self.network = network
@@ -96,6 +103,18 @@ class BaseDeepClassifierPytorch(BaseClassifier):
                 self.optimizer = optimizer
                 self.lr_scheduler = lr_scheduler
                 self.lr_scheduler_kwargs = lr_scheduler_kwargs
+                self.train_acc = torchmetrics.Accuracy(
+                    task="multiclass", num_classes=num_classes
+                )
+                self.val_acc = torchmetrics.Accuracy(
+                    task="multiclass", num_classes=num_classes
+                )
+                self.train_f1 = torchmetrics.F1Score(
+                    task="multiclass", num_classes=num_classes, average="macro"
+                )
+                self.val_f1 = torchmetrics.F1Score(
+                    task="multiclass", num_classes=num_classes, average="macro"
+                )
 
             def forward(self, x):
                 return self.network(x)
@@ -104,6 +123,10 @@ class BaseDeepClassifierPytorch(BaseClassifier):
                 inputs, targets = batch
                 outputs = self.network(**inputs)
                 loss = self.criterion(outputs, targets)
+                preds = torch.argmax(outputs, dim=1)
+                # compute & log metrics
+                self.train_acc.update(preds, targets)
+                self.train_f1.update(preds, targets)
                 self.log(
                     "train_loss", loss, prog_bar=True, on_step=False, on_epoch=True
                 )
@@ -113,7 +136,39 @@ class BaseDeepClassifierPytorch(BaseClassifier):
                 inputs, targets = batch
                 outputs = self.network(**inputs)
                 loss = self.criterion(outputs, targets)
+                # compute & log metrics
+                preds = torch.argmax(outputs, dim=1)
+                self.val_acc.update(preds, targets)
+                self.val_f1.update(preds, targets)
                 self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
+                return loss
+
+            def on_train_epoch_end(self):
+                """Log learning rate at the end of each epoch."""
+                # Compute and log metrics
+                train_acc = self.train_acc.compute()
+                train_f1 = self.train_f1.compute()
+                self.log("train_accuracy", train_acc, prog_bar=True)
+                self.log("train_f1_score", train_f1, prog_bar=True)
+                self.train_acc.reset()
+                self.train_f1.reset()
+
+                lr = self.optimizer.param_groups[0]["lr"]
+                self.log(
+                    "learning_rate",
+                    lr,
+                    prog_bar=False,
+                    on_step=False,
+                    on_epoch=True,
+                )
+
+            def on_validation_epoch_end(self):
+                val_acc = self.val_acc.compute()
+                val_f1 = self.val_f1.compute()
+                self.log("val_accuracy", val_acc, prog_bar=True)
+                self.log("val_f1_score", val_f1, prog_bar=True)
+                self.val_acc.reset()
+                self.val_f1.reset()
 
             def predict_step(self, batch, batch_idx):
                 logits = self.network(**batch)
@@ -157,6 +212,7 @@ class BaseDeepClassifierPytorch(BaseClassifier):
             self._instantiate_optimizer(),
             self.lr_scheduler,
             self.lr_scheduler_kwargs,
+            len(self._class_dictionary.items()),
         )
 
     def _fit(self, X, y, X_val=None, y_val=None, **kwargs):
