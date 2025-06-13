@@ -238,6 +238,7 @@ class BaseDeepClassifierPytorch(BaseClassifier):
             max_epochs=self.num_epochs,
             callbacks=self.callbacks,
             enable_progress_bar=self.verbose,
+            num_sanity_val_steps=0,
             **kwargs,
         )
         trainer.fit(
@@ -354,7 +355,7 @@ class BaseDeepClassifierPytorch(BaseClassifier):
         test_dataloader = self._build_dataloader(
             X, batch_size=self.pred_batch_size, shuffle=False
         )
-        trainer = pl.Trainer()
+        trainer = pl.Trainer(num_sanity_val_steps=0)
         outputs = trainer.predict(
             self.model,
             dataloaders=test_dataloader,
