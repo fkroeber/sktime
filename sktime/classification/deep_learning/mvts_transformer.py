@@ -190,8 +190,7 @@ class MVTSTransformerClassifier(BaseDeepClassifierPytorch):
 
         # n_instances, n_dims, n_timestamps
         _, self.feat_dim, self.max_len = X.shape
-
-        self.num_classes = len(np.unique(y))
+        self.num_classes = self.n_classes_
 
         return TSTransformerEncoderClassiregressor(
             feat_dim=self.feat_dim,
