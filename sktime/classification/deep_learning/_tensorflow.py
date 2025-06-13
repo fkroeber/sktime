@@ -14,6 +14,7 @@ from copy import deepcopy
 import keras
 import numpy as np
 import tensorflow as tf
+import re
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.utils import check_random_state
 
@@ -131,16 +132,35 @@ class BaseDeepClassifier(BaseClassifier):
                 **kwargs,
             )
 
-        # check callbacks for checkpoints
-        ckpt_callback = [
-            isinstance(cbk, keras.callbacks.ModelCheckpoint) for cbk in self.callbacks
-        ]
-        if any(ckpt_callback):
-            cbk = self.callbacks[ckpt_callback.index(True)]
-            self.model_ = keras.models.load_model(cbk.filepath)
-            print(f"Restored model from best metric: {cbk.best}")
+            # check callbacks for checkpoints
+            ckpt_callback = [
+                isinstance(cbk, keras.callbacks.ModelCheckpoint)
+                for cbk in self.callbacks
+            ]
+            if any(ckpt_callback):
+                cbk = self.callbacks[ckpt_callback.index(True)]
+                self.model_ = self._load_best_model_from_checkpoints(
+                    os.path.dirname(cbk.filepath)
+                )
 
         return self
+
+    def _load_best_model_from_checkpoints(self, checkpoint_dir):
+        # Match filenames like: checkpoint-epoch-5-val_loss-0.223456.tf
+        pattern = re.compile(r"checkpoint-epoch-(\d+)-val_loss-([0-9.]+)\.tf")
+        best_loss = float("inf")
+        best_model_path = None
+        for fname in os.listdir(checkpoint_dir):
+            match = pattern.match(fname)
+            if match:
+                val_loss = float(match.group(2))
+                if val_loss < best_loss:
+                    best_loss = val_loss
+                    best_model_path = os.path.join(checkpoint_dir, fname)
+        if best_model_path is None:
+            raise FileNotFoundError("No checkpoint files found in directory.")
+        print(f"Loading best model from: {best_model_path}")
+        return keras.models.load_model(best_model_path)
 
     def _predict(self, X, **kwargs):
         probs = self._predict_proba(X, **kwargs)
