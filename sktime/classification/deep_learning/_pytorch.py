@@ -284,11 +284,10 @@ class BaseDeepClassifierPytorch(BaseClassifier):
     def _build_network(self):
         pass
 
-    def _build_dataloader(self, X, y=None, batch_size=1):
-        # default behaviour if estimator doesnot implement
-        # dataloader of its own
+    def _build_dataloader(self, X, y=None, batch_size=1, shuffle=True):
+        # default behaviour if estimator does not implement dataloader of its own
         dataset = PytorchDataset(X, y)
-        return DataLoader(dataset, batch_size)
+        return DataLoader(dataset, batch_size, shuffle=shuffle)
 
     def _predict(self, X):
         """Predict labels for sequences in X.
@@ -352,7 +351,9 @@ class BaseDeepClassifierPytorch(BaseClassifier):
             2nd dimension indices correspond to possible labels (integers)
             (i, j)-th entry is predictive probability that i-th instance is of class j
         """
-        test_dataloader = self._build_dataloader(X, batch_size=self.pred_batch_size)
+        test_dataloader = self._build_dataloader(
+            X, batch_size=self.pred_batch_size, shuffle=False
+        )
         trainer = pl.Trainer()
         outputs = trainer.predict(
             self.model,
