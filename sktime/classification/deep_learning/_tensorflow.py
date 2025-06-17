@@ -146,8 +146,7 @@ class BaseDeepClassifier(BaseClassifier):
         return self
 
     def _load_best_model_from_checkpoints(self, checkpoint_dir):
-        # Match filenames like: checkpoint-epoch-5-val_loss-0.223456.tf
-        pattern = re.compile(r"checkpoint-epoch-(\d+)-val_loss-([0-9.]+)\.tf")
+        pattern = re.compile(r"checkpoint-epoch-(\d+)-val_loss-([0-9.]+)\.(tf|keras)$")
         best_loss = float("inf")
         best_model_path = None
         for fname in os.listdir(checkpoint_dir):
