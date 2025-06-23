@@ -5,9 +5,11 @@ __author__ = [
 ]
 
 import math
-
+import keras
 import numpy as np
+import tensorflow as tf
 
+from keras_self_attention import SeqSelfAttention as OriginalSeqSelfAttention
 from sktime.networks.base import BaseDeepNetwork
 from sktime.utils.dependencies import _check_dl_dependencies, _check_soft_dependencies
 
@@ -155,9 +157,6 @@ class TapNetNetwork(BaseDeepNetwork):
         input_layer  : a keras layer
         output_layer : a keras layer
         """
-        import tensorflow as tf
-        from keras_self_attention import SeqSelfAttention
-        from tensorflow import keras
 
         input_layer = keras.layers.Input(input_shape)
 
@@ -187,9 +186,7 @@ class TapNetNetwork(BaseDeepNetwork):
 
                 for i in range(self.rp_group):
                     self.idx = np.random.permutation(input_shape[1])[0 : self.rp_dim]
-                    channel = keras.layers.Lambda(
-                        lambda x: tf.gather(x, indices=self.idx, axis=2)
-                    )(input_layer)
+                    channel = ChannelSelector(indices=self.idx)(input_layer)
                     # x_conv = x
                     # x_conv = self.conv_1_models[i](x[:, self.idx[i], :])
                     x_conv = keras.layers.Conv1D(
@@ -289,3 +286,23 @@ class TapNetNetwork(BaseDeepNetwork):
         x = keras.layers.Dense(self.layers[1], name="fc_2")(x)
 
         return input_layer, x
+
+
+@keras.saving.register_keras_serializable()
+class ChannelSelector(tf.keras.layers.Layer):
+    def __init__(self, indices, **kwargs):
+        super().__init__(**kwargs)
+        self.indices = list(indices)
+
+    def call(self, inputs):
+        return tf.gather(inputs, indices=self.indices, axis=2)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"indices": self.indices})
+        return config
+
+
+@keras.saving.register_keras_serializable()
+class SeqSelfAttention(OriginalSeqSelfAttention):
+    pass
