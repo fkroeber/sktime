@@ -2,8 +2,11 @@
 
 __author__ = ["James-Large", "Withington", "TonyBagnall", "AurumnPegasus"]
 
+from keras.saving import register_keras_serializable
+from keras_self_attention import SeqSelfAttention as OriginalSeqSelfAttention
 from sktime.networks.base import BaseDeepNetwork
 from sktime.utils.dependencies import _check_dl_dependencies, _check_soft_dependencies
+from tensorflow import keras
 
 
 class CNTCNetwork(BaseDeepNetwork):
@@ -89,9 +92,6 @@ class CNTCNetwork(BaseDeepNetwork):
         input_layer: a keras layer
         output_layer: a keras layer
         """
-        from keras_self_attention import SeqSelfAttention
-        from tensorflow import keras
-
         input_layers = []
 
         # CNN Arm
@@ -184,3 +184,8 @@ class CNTCNetwork(BaseDeepNetwork):
         mlp2 = keras.layers.Dropout(0.1)(mlp2)
         flat = keras.layers.Flatten()(mlp2)
         return input_layers, flat
+
+
+@register_keras_serializable()
+class SeqSelfAttention(OriginalSeqSelfAttention):
+    pass
