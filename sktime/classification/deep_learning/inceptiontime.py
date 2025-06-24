@@ -51,6 +51,9 @@ class InceptionTimeClassifier(BaseDeepClassifier):
     optimizer : keras.optimizers object, default = Adam(lr=0.01)
         specify the optimizer and the learning rate to be used.
     loss: str, default="categorical_crossentropy"
+    activation : str, optional (default="softmax")
+        The activation function to apply at the output. It should be
+        "softmax" if response variable has more than two types.
     metrics: optional
 
     Notes
@@ -108,6 +111,7 @@ class InceptionTimeClassifier(BaseDeepClassifier):
         random_state=None,
         verbose=False,
         loss="categorical_crossentropy",
+        activation="softmax",
         metrics=None,
         optimizer=None,
     ):
@@ -121,6 +125,7 @@ class InceptionTimeClassifier(BaseDeepClassifier):
         self.depth = depth
         self.kernel_size = kernel_size
         self.loss = loss
+        self.activation = activation
         self.metrics = metrics
         self.n_epochs = n_epochs
         self.n_filters = n_filters
@@ -163,7 +168,9 @@ class InceptionTimeClassifier(BaseDeepClassifier):
 
         input_layer, output_layer = self._network.build_network(input_shape, **kwargs)
 
-        output_layer = keras.layers.Dense(n_classes, activation="softmax")(output_layer)
+        output_layer = keras.layers.Dense(n_classes, activation=self.activation)(
+            output_layer
+        )
 
         model = keras.models.Model(inputs=input_layer, outputs=output_layer)
 

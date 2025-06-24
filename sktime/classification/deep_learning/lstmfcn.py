@@ -32,6 +32,9 @@ class LSTMFCNClassifier(BaseDeepClassifier):
         output dimension for LSTM layer
     attention: boolean, default=False
         If True, uses custom attention LSTM layer
+    activation : str, optional (default="softmax")
+        The activation function to apply at the output. It should be
+        "softmax" if response variable has more than two types.
     callbacks: keras callbacks, default=ReduceLRonPlateau
         Keras callbacks to use such as learning rate reduction or saving best model
         based on validation error
@@ -84,6 +87,7 @@ class LSTMFCNClassifier(BaseDeepClassifier):
         lstm_size=8,
         attention=False,
         loss="categorical_crossentropy",
+        activation="softmax",
         metrics=None,
         optimizer=None,
         callbacks=None,
@@ -101,6 +105,7 @@ class LSTMFCNClassifier(BaseDeepClassifier):
         self.attention = attention
         self.optimizer = optimizer
         self.loss = loss
+        self.activation = activation
         self.metrics = metrics
         self.callbacks = callbacks
         self.random_state = random_state
@@ -139,7 +144,7 @@ class LSTMFCNClassifier(BaseDeepClassifier):
 
         input_layers, output_layer = self._network.build_network(input_shape, **kwargs)
 
-        output_layer = keras.layers.Dense(units=n_classes, activation="softmax")(
+        output_layer = keras.layers.Dense(units=n_classes, activation=self.activation)(
             output_layer
         )
 

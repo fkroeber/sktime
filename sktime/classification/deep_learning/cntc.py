@@ -40,6 +40,9 @@ class CNTCClassifier(BaseDeepClassifier):
         whether to output extra information
     loss            : string, default="mean_squared_error"
         fit parameter for the keras model
+    activation : str, optional (default="softmax")
+        The activation function to apply at the output. It should be
+        "softmax" if response variable has more than two types.
     optimizer       : keras.optimizer, default=keras.optimizers.Adam(),
     metrics         : list of strings, default=["accuracy"],
 
@@ -97,6 +100,7 @@ class CNTCClassifier(BaseDeepClassifier):
         callbacks=None,
         verbose=False,
         loss="categorical_crossentropy",
+        activation="softmax",
         metrics=None,
         optimizer=None,
         random_state=0,
@@ -114,6 +118,7 @@ class CNTCClassifier(BaseDeepClassifier):
         self.pred_batch_size = pred_batch_size or batch_size
         self.verbose = verbose
         self.loss = loss
+        self.activation = activation
         self.metrics = metrics
         self.random_state = random_state
         self.optimizer = optimizer
@@ -144,7 +149,7 @@ class CNTCClassifier(BaseDeepClassifier):
         metrics = ["accuracy"] if self.metrics is None else self.metrics
         input_layer, output_layer = self._network.build_network(input_shape, **kwargs)
 
-        output_layer = keras.layers.Dense(units=n_classes, activation="softmax")(
+        output_layer = keras.layers.Dense(units=n_classes, activation=self.activation)(
             output_layer
         )
 
