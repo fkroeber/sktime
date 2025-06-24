@@ -44,7 +44,7 @@ class MCDCNNClassifier(BaseDeepClassifier):
         should be supported by keras.
     activation : str, optional (default="sigmoid")
         The activation function to apply at the output. It should be
-        "software" if response variable has more than two types.
+        "softmax" if response variable has more than two types.
     use_bias : bool, optional (default=True)
         Whether bias should be included in the output layer.
     metrics : None or string, optional (default=None)
