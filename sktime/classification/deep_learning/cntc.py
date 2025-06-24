@@ -3,6 +3,7 @@
 __author__ = ["James-Large", "TonyBagnall", "AurumnPegasus"]
 __all__ = ["CNTCClassifier"]
 
+import numpy as np
 from sktime.classification.deep_learning._tensorflow import BaseDeepClassifier
 from sktime.networks.cntc import CNTCNetwork
 from sktime.utils.dependencies import _check_dl_dependencies
@@ -160,6 +161,25 @@ class CNTCClassifier(BaseDeepClassifier):
             metrics=metrics,
         )
         return model
+
+    def _predict_proba(self, X, **kwargs):
+        """Find probability estimates for each class for all cases in X.
+
+        Parameters
+        ----------
+        X : an np.ndarray of shape = (n_instances, n_dimensions, series_length)
+            The training input samples.
+
+        Returns
+        -------
+        output : array of shape = [n_instances, n_classes] of probabilities
+        """
+        X = self._prepare_data(X)
+        probs = self.model_.predict(X, self.pred_batch_size, **kwargs)
+        if probs.shape[1] == 1:
+            probs = np.hstack([1 - probs, probs])
+        probs = probs / probs.sum(axis=1, keepdims=1)
+        return probs
 
     def _prepare_data(self, X):
         """
