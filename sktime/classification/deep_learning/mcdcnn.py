@@ -206,7 +206,7 @@ class MCDCNNClassifier(BaseDeepClassifier):
         self.check_is_fitted()
         X = self._prepare_data(X)
 
-        probs = self.model_.predict(X, self.batch_size, **kwargs)
+        probs = self.model_.predict(X, self.pred_batch_size, **kwargs)
 
         if probs.shape[1] == 1:
             probs = np.hstack([1 - probs, probs])
