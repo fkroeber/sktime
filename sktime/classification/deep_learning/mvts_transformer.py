@@ -183,14 +183,23 @@ class MVTSTransformerClassifier(BaseDeepClassifierPytorch):
                 "SGD": torch.optim.SGD,
             }
 
-    def _build_network(self, X, y):
+    def _build_network(self, X, y, X_shape=None, num_classes=None):
         from sktime.networks.mvts_transformer import (
             TSTransformerEncoderClassiregressor,
         )
 
-        # n_instances, n_dims, n_timestamps
-        _, self.feat_dim, self.max_len = X.shape
-        self.num_classes = self.n_classes_
+        # read input dimensions
+        # X structure: n_instances, n_dims, n_timestamps
+        if X_shape is not None:
+            _, self.feat_dim, self.max_len = X_shape
+        else:
+            _, self.feat_dim, self.max_len = X.shape
+
+        # read output dimensions
+        if num_classes is not None:
+            self.num_classes = num_classes
+        else:
+            self.num_classes = self.n_classes_
 
         return TSTransformerEncoderClassiregressor(
             feat_dim=self.feat_dim,
