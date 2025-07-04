@@ -148,8 +148,8 @@ class BaseDeepClassifierPytorch(BaseClassifier):
                 # Compute and log metrics
                 train_acc = self.train_acc.compute()
                 train_f1 = self.train_f1.compute()
-                self.log("train_accuracy", train_acc, prog_bar=True)
-                self.log("train_f1_score", train_f1, prog_bar=True)
+                self.log("train_micro_acc", float(train_acc.cpu()), prog_bar=True)
+                self.log("train_macro_f1", float(train_f1.cpu()), prog_bar=True)
                 self.train_acc.reset()
                 self.train_f1.reset()
 
@@ -165,8 +165,8 @@ class BaseDeepClassifierPytorch(BaseClassifier):
             def on_validation_epoch_end(self):
                 val_acc = self.val_acc.compute()
                 val_f1 = self.val_f1.compute()
-                self.log("val_accuracy", val_acc, prog_bar=True)
-                self.log("val_f1_score", val_f1, prog_bar=True)
+                self.log("val_micro_acc", float(val_acc.cpu()), prog_bar=True)
+                self.log("val_macro_f1", float(val_f1.cpu()), prog_bar=True)
                 self.val_acc.reset()
                 self.val_f1.reset()
 
