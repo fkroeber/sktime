@@ -146,6 +146,14 @@ class BaseDeepClassifier(BaseClassifier):
         return self
 
     def _load_best_model_from_checkpoints(self, checkpoint_dir):
+        # if only one checkpoint, return it
+        ckpts = [f for f in os.listdir(checkpoint_dir) if f.endswith(".keras")]
+        if not ckpts:
+            raise FileNotFoundError(f"No .keras checkpoints in {checkpoint_dir}")
+        # if only one checkpoint, return it
+        if len(ckpts) == 1:
+            return keras.models.load_model(os.path.join(checkpoint_dir, ckpts[0]))
+        # else: find best one with minimum validation loss
         pattern = re.compile(r"checkpoint-epoch-(\d+)-val_loss-([0-9.]+)\.(tf|keras)$")
         best_loss = float("inf")
         best_model_path = None
