@@ -11,9 +11,44 @@ import numpy as np
 import pytorch_lightning as pl
 import torch.nn.functional as F
 import torchmetrics
+from collections.abc import Callable
 
 from sktime.classification.base import BaseClassifier
 from sktime.utils.dependencies import _check_soft_dependencies
+from sktime.utils.dependencies import _safe_import
+
+LC_TO_UC_ACTIVATIONS = {
+    "elu": "ELU",
+    "hardshrink": "Hardshrink",
+    "hardsigmoid": "Hardsigmoid",
+    "hardtanh": "Hardtanh",
+    "hardswish": "Hardswish",
+    "leakyrelu": "LeakyReLU",
+    "logsigmoid": "LogSigmoid",
+    "multiheadattention": "MultiheadAttention",
+    "prelu": "PReLU",
+    "relu": "ReLU",
+    "relu6": "ReLU6",
+    "rrelu": "RReLU",
+    "selu": "SELU",
+    "celu": "CELU",
+    "gelu": "GELU",
+    "sigmoid": "Sigmoid",
+    "silu": "SiLU",
+    "mish": "Mish",
+    "softplus": "Softplus",
+    "softshrink": "Softshrink",
+    "softsign": "Softsign",
+    "tanh": "Tanh",
+    "tanhshrink": "Tanhshrink",
+    "threshold": "Threshold",
+    "glu": "GLU",
+    "softmin": "Softmin",
+    "softmax": "Softmax",
+    "softmax2d": "Softmax2d",
+    "logsoftmax": "LogSoftmax",
+    "adaptivelogsoftmaxwithloss": "AdaptiveLogSoftmaxWithLoss",
+}
 
 if _check_soft_dependencies("torch", severity="none"):
     import torch
@@ -84,6 +119,11 @@ class BaseDeepClassifierPytorch(BaseClassifier):
 
         # instantiate optimizers
         self.optimizers = OPTIMIZERS
+
+        activation_map = {}
+        for var in ("activation", "activation_hidden"):
+            activation_map[var] = getattr(self, var, None)
+        self._callable_activations = self._instantiate_activations(activation_map)
 
     def _build_lightning_module(self):
 
@@ -275,6 +315,54 @@ class BaseDeepClassifierPytorch(BaseClassifier):
         else:
             # default criterion
             return torch.nn.CrossEntropyLoss()
+
+    def _instantiate_activations(
+        self, activations: dict[str, str | Callable | None]
+    ) -> dict[str, Callable | None]:
+        """Instantiate PyTorch activations from string or module specifications.
+
+        Parameters
+        ----------
+        activations : dict[str, str | Callable | None]
+            A mapping where each key is the name of an activation attribute, and the
+            value is either the activation specified by the user or a default provided
+            by the estimator.
+
+        Returns
+        -------
+        callable_activations : dict[str, torch.nn.Module | None]
+            A dictionary of activation functions, keyed by the attribute name.
+        """
+        import torch
+
+        callable_activations: dict[str, torch.nn.Module | None] = {}
+        for activation_var, activation in activations.items():
+            if activation is None:
+                callable_activations[activation_var] = None
+                continue
+            if isinstance(activation, torch.nn.Module):
+                callable_activations[activation_var] = activation
+                continue
+            elif not isinstance(activation, str):
+                raise TypeError(
+                    f"Activation '{activation}' should be string or a torch.nn.Module. "
+                    f"But got {type(activation)} instead."
+                )
+
+            uc_activation = LC_TO_UC_ACTIVATIONS.get(activation, activation)
+            if not _safe_import(f"torch.nn.{uc_activation}"):
+                raise ValueError(
+                    f"Activation '{uc_activation}' is not a valid PyTorch activation"
+                    "function in torch.nn module. Please pass a valid PyTorch"
+                    "activation function in torch.nn module. Refer "
+                    "https://pytorch.org/docs/stable/nn.html#non-linear-activations-"
+                    "weighted-sum-nonlinearity for list of valid activation functions."
+                )
+
+            callable_activations[activation_var] = _safe_import(
+                f"torch.nn.{uc_activation}"
+            )()
+        return callable_activations
 
     @abc.abstractmethod
     def _build_network(self):
