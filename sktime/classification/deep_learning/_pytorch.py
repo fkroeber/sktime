@@ -13,6 +13,7 @@ import torch.nn.functional as F
 import torchmetrics
 from collections.abc import Callable
 
+from sktime.base._base_panel import _is_lazy_panel
 from sktime.classification.base import BaseClassifier
 from sktime.utils.dependencies import _check_soft_dependencies
 from sktime.utils.dependencies import _safe_import
@@ -79,6 +80,7 @@ class BaseDeepClassifierPytorch(BaseClassifier):
         "y_inner_mtype": "numpy1D",
         "capability:multivariate": True,
         "capability:multioutput": False,
+        "capability:lazy_panel": True,
     }
 
     def __init__(
@@ -264,7 +266,9 @@ class BaseDeepClassifierPytorch(BaseClassifier):
         # build dataloaders
         train_dataloader = self._build_dataloader(X, y, batch_size=self.batch_size)
         val_dataloader = (
-            self._build_dataloader(X_val, y_val, batch_size=self.pred_batch_size)
+            self._build_dataloader(
+                X_val, y_val, batch_size=self.pred_batch_size, shuffle=False
+            )
             if X_val is not None
             else None
         )
@@ -481,14 +485,17 @@ class BaseDeepClassifierPytorch(BaseClassifier):
 
 
 class PytorchDataset(Dataset):
-    """Dataset for use in sktime deep learning classifier based on pytorch."""
+    """Dataset for use in sktime deep learning classifier based on pytorch.
+
+    X of shape (n_instances, n_dims, n_timestamps) is served as samples of shape
+    (n_timestamps, n_dims). In-memory X is transposed once; a lazily loaded X
+    (see ``sktime.base._base_panel._is_lazy_panel``) is never loaded as a whole,
+    but read and transposed per batch in ``__getitems__``.
+    """
 
     def __init__(self, X, y=None):
-        # X.shape = (batch_size, n_dims, n_timestamps)
-        X = np.transpose(X, (0, 2, 1))
-        # X.shape = (batch_size, n_timestamps, n_dims)
-
-        self.X = X
+        self.lazy = _is_lazy_panel(X)
+        self.X = X if self.lazy else np.transpose(X, (0, 2, 1))
         self.y = y
 
     def __len__(self):
@@ -497,14 +504,21 @@ class PytorchDataset(Dataset):
 
     def __getitem__(self, i):
         """Get item at index."""
-        x = self.X[i]
-        x = torch.tensor(x, dtype=torch.float)
-        inputs = {"X": x}
+        return self.__getitems__([i])[0]
+
+    def __getitems__(self, indices):
+        """Get the items of a whole batch with a single read of X.
+
+        Used by torch's DataLoader (torch>=2.0) instead of one __getitem__ per index.
+        """
+        idx = np.asarray(indices)
+        X = np.asarray(self.X[idx])
+        if self.lazy:
+            X = X.transpose(0, 2, 1)
+        X = torch.tensor(X, dtype=torch.float)
         # to make it reusable for predict
         if self.y is None:
-            return inputs
-
+            return [{"X": x} for x in X]
         # return y during fit
-        y = self.y[i]
-        y = torch.tensor(y, dtype=torch.long)
-        return inputs, y
+        y = torch.tensor(np.asarray(self.y)[idx], dtype=torch.long)
+        return [({"X": x}, t) for x, t in zip(X, y)]

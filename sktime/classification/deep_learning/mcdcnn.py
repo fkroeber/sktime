@@ -4,10 +4,10 @@ __author__ = ["James-Large"]
 
 import numpy as np
 
+from sktime.base._base_panel import _is_lazy_panel
 from sktime.classification.deep_learning._tensorflow import BaseDeepClassifier
 from sktime.networks.mcdcnn import MCDCNNNetwork
 from sktime.utils.dependencies import _check_dl_dependencies
-
 
 class MCDCNNClassifier(BaseDeepClassifier):
     """Multi Channel Deep Convolutional Neural Classifier, as described in [1]_.
@@ -204,9 +204,12 @@ class MCDCNNClassifier(BaseDeepClassifier):
         output : array of shape = [n_instances, n_classes] of probabilities
         """
         self.check_is_fitted()
-        X = self._prepare_data(X)
-
-        probs = self.model_.predict(X, self.pred_batch_size, **kwargs)
+        if _is_lazy_panel(X):
+            X = self._make_lazy_dataset(X, None, self.pred_batch_size or 32)
+            probs = self.model_.predict(X, **kwargs)
+        else:
+            X = self._prepare_data(X)
+            probs = self.model_.predict(X, self.pred_batch_size, **kwargs)
 
         if probs.shape[1] == 1:
             probs = np.hstack([1 - probs, probs])

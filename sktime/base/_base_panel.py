@@ -17,6 +17,23 @@ import pandas as pd
 from sktime.base import BaseEstimator
 from sktime.utils.warnings import warn
 
+def _is_lazy_panel(X):
+    """Return True if X is a lazily loaded (batch-readable) numpy3D-like panel.
+
+    A lazy panel is an explicit opt-in container for data that does not fit into
+    memory. It must provide:
+
+    * ``_sktime_lazy_panel = True`` (opt-in marker, avoids accidental duck-typing)
+    * ``shape`` : tuple ``(n_instances, n_dimensions, series_length)``
+    * ``__len__`` : returns ``n_instances``
+    * ``__getitem__(idx)`` for a 1D integer np.ndarray ``idx`` (sorted ascending),
+      returning an in-memory np.ndarray of shape ``(len(idx), n_dim, length)``
+      in the requested order
+    * optional ``has_nans`` : bool, whether the data contain NaNs (not scanned)
+
+    Only estimators with tag ``"capability:lazy_panel"=True`` accept such input.
+    """
+    return getattr(X, "_sktime_lazy_panel", False) is True
 
 class BasePanelMixin(BaseEstimator):
     """Abstract base class for time series panel tasks, e.g., classifiers, regressors.
@@ -120,6 +137,10 @@ class BasePanelMixin(BaseEstimator):
 
         if cv is None:
             return getattr(est.fit(X, y), method)(X)
+        elif _is_lazy_panel(X):
+            raise NotImplementedError(
+                "fit_predict with cv is not supported for lazily loaded X."
+            )
         elif change_state:
             self.fit(X, y)
 
@@ -324,6 +345,10 @@ class BasePanelMixin(BaseEstimator):
         """
         from sktime.datatypes import convert
 
+        # lazy panels are passed through untouched, they are read batch-wise later
+        if _is_lazy_panel(X):
+            return X
+
         inner_type = self.get_tag("X_inner_mtype")
         # convert pd.DataFrame
         X = convert(
@@ -518,6 +543,10 @@ class BasePanelMixin(BaseEstimator):
         )
         from sktime.datatypes._dtypekind import DtypeKind
 
+        # lazily loaded X: cheap structural checks only, the data are never loaded
+        if _is_lazy_panel(X):
+            return self._check_lazy_input(X, y, enforce_min_instances)
+
         # Check X is valid input type and recover the data characteristics
         X_valid, msg, X_metadata = check_is_scitype(
             X, scitype="Panel", return_metadata=return_metadata
@@ -579,6 +608,65 @@ class BasePanelMixin(BaseEstimator):
                 )
 
         return X_metadata
+
+    def _check_lazy_input(self, X, y=None, enforce_min_instances=1):
+        """Validate a lazily loaded panel without reading its data.
+
+        Returns metadata in the format of ``_check_input``. ``has_nans`` is taken
+        from ``X.has_nans`` if provided (e.g., computed when the data were written),
+        otherwise it is assumed False, since a scan would require reading all data.
+        """
+        from sktime.datatypes._dtypekind import DtypeKind
+
+        if not self.get_tag("capability:lazy_panel", False, raise_error=False):
+            raise TypeError(
+                f"{type(self).__name__} does not support lazily loaded X of type "
+                f"{type(X).__name__}. Load the data into memory first, e.g., via "
+                "np.asarray(X), or use an estimator with tag "
+                "'capability:lazy_panel'=True."
+            )
+        shape = tuple(X.shape)
+        if len(shape) != 3:
+            raise ValueError(
+                "lazily loaded X must have shape (n_instances, n_dimensions, "
+                f"series_length), but found shape {shape}"
+            )
+        n_cases = shape[0]
+        if len(X) != n_cases:
+            raise ValueError(f"len(X)={len(X)} does not match X.shape[0]={n_cases}")
+        if n_cases < enforce_min_instances:
+            raise ValueError(
+                f"Minimum number of cases required is {enforce_min_instances} but X "
+                f"has : {n_cases}"
+            )
+        if y is not None:
+            if not isinstance(y, (pd.Series, pd.DataFrame, np.ndarray)):
+                raise ValueError(
+                    "y must be a np.array or a pd.Series or pd.DataFrame, but found "
+                    f"type: {type(y)}"
+                )
+            if y.shape[0] != n_cases:
+                raise ValueError(
+                    f"Mismatch in number of cases. Number in X = {n_cases} nos in y = "
+                    f"{y.shape[0]}"
+                )
+            if len(np.unique(y)) == 1:
+                warn(
+                    "only single label seen in y passed to "
+                    f"fit of {self.EST_TYPE} {type(self).__name__}",
+                    obj=self,
+                )
+        return {
+            "mtype": "lazy_panel",
+            "scitype": "Panel",
+            "n_instances": n_cases,
+            "has_nans": bool(getattr(X, "has_nans", False)),
+            "is_univariate": shape[1] == 1,
+            "is_equal_length": True,
+            "is_equally_spaced": True,
+            "is_empty": n_cases == 0,
+            "feature_kind": [DtypeKind.FLOAT] * shape[1],
+        }
 
     def _internal_convert(self, X, y=None):
         """Convert X and y if necessary as a user convenience.

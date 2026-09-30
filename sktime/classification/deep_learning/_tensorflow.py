@@ -8,6 +8,7 @@ __author__ = ["James-Large", "ABostrom", "TonyBagnall", "aurunmpegasus", "achiev
 __all__ = ["BaseDeepClassifier"]
 
 import os
+import threading
 from abc import abstractmethod
 from copy import deepcopy
 
@@ -19,8 +20,106 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.utils import check_random_state
 
 from sktime.base._base import SERIALIZATION_FORMATS
+from sktime.base._base_panel import _is_lazy_panel
 from sktime.classification.base import BaseClassifier
 from sktime.utils.dependencies import _check_soft_dependencies
+
+ 
+# keras 3: PyDataset; keras 2: Sequence (same protocol, no worker kwargs)
+_PyDataset = getattr(keras.utils, "PyDataset", keras.utils.Sequence)
+
+class _LazyPanelDataset(_PyDataset):
+    """Keras PyDataset reading a lazily loaded sktime panel batch by batch.
+
+    Parameters
+    ----------
+    X : lazy panel, see ``sktime.base._base_panel._is_lazy_panel``
+        yields np.ndarray of shape (batch, n_dimensions, series_length)
+    prepare : callable
+        maps a numpy3D batch to the keras input, i.e., the estimator's
+        ``_prepare_data``, applied per batch instead of to the full array
+    y_idx : 1D np.ndarray of int or None
+        column index of the one-hot target per instance; None for prediction
+    n_classes : int
+        number of one-hot columns
+    batch_size : int
+    shuffle : bool
+        whether to reshuffle instances (across the whole X) after every epoch
+    seed : int or None
+        seed for the shuffling
+    **kwargs : passed to PyDataset, i.e., workers, use_multiprocessing,
+        max_queue_size (keras 3 only),  ``use_multiprocessing=True`` is not
+        supported with ``shuffle=True``
+    """
+
+    def __init__(
+        self,
+        X,
+        prepare,
+        y_idx=None,
+        n_classes=None,
+        batch_size=32,
+        shuffle=False,
+        seed=None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        if shuffle and kwargs.get("use_multiprocessing", False):
+            raise ValueError(
+                "use_multiprocessing=True is not supported for training on lazily "
+                "loaded X, use threads instead, e.g., loader_kwargs={'workers': 4}"
+            )
+        self.X = X
+        self.prepare = prepare
+        self.y_idx = None if y_idx is None else np.asarray(y_idx)
+        self._eye = None if y_idx is None else np.eye(n_classes, dtype="float32")
+        self.batch_size = int(batch_size)
+        self.shuffle = shuffle
+        self._rng = np.random.default_rng(seed)
+        self._order = np.arange(len(X))
+        self._cursor = len(X)
+        self._lock = threading.Lock()
+
+    def __len__(self):
+        return int(np.ceil(len(self.X) / self.batch_size))
+
+    def _next_shuffled_indices(self):
+        """Next batch of the running pass over a random permutation (thread-safe)."""
+        with self._lock:
+            if self._cursor >= len(self._order):
+                self._rng.shuffle(self._order)
+                self._cursor = 0
+            lo = self._cursor
+            self._cursor += self.batch_size
+            return self._order[lo : lo + self.batch_size].copy()
+
+    def __getitem__(self, i):
+        if i < 0 or i >= len(self):
+            raise IndexError(f"batch index {i} out of range [0, {len(self)})")
+        if self.shuffle:
+            idx = self._next_shuffled_indices()
+        else:
+            idx = np.arange(i * self.batch_size, min((i + 1) * self.batch_size, len(self.X)))
+        # sorted indices: faster reads, order within a batch is irrelevant
+        idx = np.sort(idx)
+        Xb = self.prepare(np.asarray(self.X[idx]))
+        if isinstance(Xb, list):
+            # multi-input models (e.g., MCDCNN): tf.data requires tuples, not lists
+            Xb = tuple(Xb)
+        if self.y_idx is None:
+            # 1-tuple, so that list-valued inputs (e.g., MCDCNN) are not
+            # misinterpreted by keras as (x, y)
+            return (Xb,)
+        return Xb, self._eye[self.y_idx[idx]]
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["_lock"] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._lock = threading.Lock()
 
 
 class BaseDeepClassifier(BaseClassifier):
@@ -43,6 +142,7 @@ class BaseDeepClassifier(BaseClassifier):
     _tags = {
         "X_inner_mtype": "numpy3D",
         "capability:multivariate": True,
+        "capability:lazy_panel": True,
         "python_dependencies": "tensorflow",
     }
 
@@ -88,24 +188,44 @@ class BaseDeepClassifier(BaseClassifier):
         y_val : np.ndarray of shape n
             The validation data class labels.
         skip_setup : bool, default = False
-        **kwargs : additional fitting parameters
+        **kwargs : additional fitting parameter
+            ``loader_kwargs`` (dict) is popped and passed to the keras PyDataset
+            used for lazily loaded X/X_val, e.g., ``{"workers": 4}``
 
         Returns
         -------
         self : object
         """
-        # prepare input & target data
-        X = self._prepare_data(X)
-        if X_val is not None:
-            X_val = self._prepare_data(X_val)
+        # X and/or X_val may be lazily loaded panels -> fed to keras as PyDataset
+        self._loader_kwargs = dict(kwargs.pop("loader_kwargs", None) or {})
+        lazy, lazy_val = _is_lazy_panel(X), _is_lazy_panel(X_val)
+        fit_kwargs = {}
 
-        y_onehot = self._convert_y_to_keras(y)
-        if y_val is not None:
-            y_val_onehot = self._convert_y_to_keras(y_val)
+        # prepare input & target data
+        if lazy:
+            self._prepare_data(np.asarray(X[np.arange(1)]))
+            train_data = self._make_lazy_dataset(
+                X, y, self.batch_size, shuffle=True
+            )
+            X, y_onehot = train_data, None
+        else:
+            X = self._prepare_data(X)
+            y_onehot = self._convert_y_to_keras(y)
+            fit_kwargs["batch_size"] = self.batch_size
 
         # compose validation data if both given
         if X_val is not None and y_val is not None:
-            validation_data = (X_val, y_val_onehot)
+            if lazy_val:
+                # keras semantics: validation_batch_size defaults to batch_size
+                validation_data = self._make_lazy_dataset(
+                    X_val, y_val, self.pred_batch_size or self.batch_size
+                )
+            else:
+                validation_data = (
+                    self._prepare_data(X_val),
+                    self._convert_y_to_keras(y_val),
+                )
+                fit_kwargs["validation_batch_size"] = self.pred_batch_size
         else:
             validation_data = None
 
@@ -123,12 +243,11 @@ class BaseDeepClassifier(BaseClassifier):
             self.history = self.model_.fit(
                 X,
                 y_onehot,
-                batch_size=self.batch_size,
-                validation_batch_size=self.pred_batch_size,
                 epochs=self.n_epochs,
                 verbose=self.verbose,
                 validation_data=validation_data,
                 callbacks=self.callbacks,
+                **fit_kwargs,
                 **kwargs,
             )
 
@@ -187,13 +306,18 @@ class BaseDeepClassifier(BaseClassifier):
         -------
         output : array of shape = [n_instances, n_classes] of probabilities
         """
-        # Transpose to work correctly with keras
-        X = self._prepare_data(X)
-        # The following is the slow part of sktime
-        # Takes approx. 95% of the time
-        # Convert_to_tensor if not explictly called, internally called by .predict
-        X = tf.convert_to_tensor(X)
-        probs = self.model_.predict(X, self.pred_batch_size, **kwargs)
+        if _is_lazy_panel(X):
+            # keras semantics: predict batch_size defaults to 32
+            X = self._make_lazy_dataset(X, None, self.pred_batch_size or 32)
+            probs = self.model_.predict(X, **kwargs)
+        else:
+            # Transpose to work correctly with keras
+            X = self._prepare_data(X)
+            # The following is the slow part of sktime
+            # Takes approx. 95% of the time
+            # Convert_to_tensor if not explictly called, internally called by .predict
+            X = tf.convert_to_tensor(X)
+            probs = self.model_.predict(X, self.pred_batch_size, **kwargs)
 
         # check if binary classification
         if probs.shape[1] == 1:
@@ -201,6 +325,39 @@ class BaseDeepClassifier(BaseClassifier):
             probs = np.hstack([1 - probs, probs])
         probs = probs / probs.sum(axis=1, keepdims=1)
         return probs
+
+    def _make_lazy_dataset(self, X, y, batch_size, shuffle=False):
+        """Wrap a lazily loaded panel (and labels) into a keras PyDataset.
+
+        Labels are kept as integer column indices and one-hot encoded per batch,
+        with the same column order as ``_convert_y_to_keras``.
+        """
+        y_idx = None if y is None else self._encode_y_to_index(y)
+        seed = self.random_state if isinstance(self.random_state, int) else None
+        return _LazyPanelDataset(
+            X,
+            prepare=self._prepare_data,
+            y_idx=y_idx,
+            n_classes=len(self._class_dictionary),
+            batch_size=batch_size,
+            shuffle=shuffle,
+            seed=seed,
+            **getattr(self, "_loader_kwargs", {}),
+        )
+
+    def _encode_y_to_index(self, y):
+        """Map labels to one-hot column indices (order of self._class_dictionary)."""
+        y = np.asarray(y).reshape(-1)
+        keys = np.asarray(list(self._class_dictionary.keys()))
+        order = np.argsort(keys, kind="stable")
+        pos = np.clip(np.searchsorted(keys[order], y), 0, len(keys) - 1)
+        y_idx = order[pos]
+        unknown = keys[y_idx] != y
+        if unknown.any():
+            raise ValueError(
+                f"y contains labels not in the class dictionary: {np.unique(y[unknown])}"
+            )
+        return y_idx.astype(np.int64)
 
     def _convert_y_to_keras(self, y):
         """Convert y to required Keras format."""

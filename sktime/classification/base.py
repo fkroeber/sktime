@@ -27,6 +27,7 @@ import time
 import numpy as np
 
 from sktime.base import BasePanelMixin
+from sktime.base._base_panel import _is_lazy_panel
 from sktime.datatypes import VectorizedDF, check_is_scitype
 from sktime.utils.dependencies import _check_estimator_deps
 from sktime.utils.sklearn import is_sklearn_transformer
@@ -64,6 +65,7 @@ class BaseClassifier(BasePanelMixin):
         "capability:contractable": False,
         "capability:multithreading": False,
         "capability:predict_proba": False,
+        "capability:lazy_panel": False,  # can fit/predict read X lazily in batches?
         "python_version": None,  # PEP 440 python version specifier to limit versions
         "requires_cython": False,  # whether C compiler is required in env, e.g., gcc
         "authors": "sktime developers",  # author(s) of the object
@@ -269,6 +271,10 @@ class BaseClassifier(BasePanelMixin):
         self._y_metadata = y_metadata
         self._y_inner_mtype = y_inner_mtype
         self._is_vectorized = isinstance(y, VectorizedDF)
+        if self._is_vectorized and _is_lazy_panel(X):
+            raise NotImplementedError(
+                "multioutput y (vectorization) is not supported for lazily loaded X"
+            )
 
         if self._is_vectorized:
             self._vectorize(
@@ -337,8 +343,12 @@ class BaseClassifier(BasePanelMixin):
         # convert data as dictated by the classifier tags
         X = self._convert_X(X, X_mtype)
         if val_given:
-            X_val = self._convert_X(X_val, X_mtype)
-
+            X_val_metadata = self._check_input(
+                X_val, y_val, return_metadata=self.METADATA_REQ_IN_CHECKS
+            )
+            self._check_capabilities(X_val_metadata)
+            X_val = self._convert_X(X_val, X_val_metadata["mtype"])
+ 
         # multithread setup
         multithread = self.get_tag("capability:multithreading")
         if multithread:
@@ -620,11 +630,14 @@ class BaseClassifier(BasePanelMixin):
 
     def _single_class_y_pred(self, X, method="predict"):
         """Handle the prediction case where only single class label was seen in fit."""
-        X_meta_required = ["n_instances"]
-        _, _, X_meta = check_is_scitype(
-            X, scitype="Panel", return_metadata=X_meta_required
-        )
-        n_instances = X_meta["n_instances"]
+        if _is_lazy_panel(X):
+            n_instances = len(X)
+        else:
+            X_meta_required = ["n_instances"]
+            _, _, X_meta = check_is_scitype(
+                X, scitype="Panel", return_metadata=X_meta_required
+            )
+            n_instances = X_meta["n_instances"]
         if method == "predict":
             return np.repeat(list(self._class_dictionary.keys()), n_instances)
         else:  # method == "predict_proba"

@@ -85,6 +85,7 @@ class CNTCClassifier(BaseDeepClassifier):
         ],
         "maintainers": ["James-Large", "Withington", "AurumnPegasus"],
         "python_dependencies": ["tensorflow", "keras-self-attention"],
+        "capability:lazy_panel": False, # _prepare_data computes rolling means across instances -> not batchable
     }
 
     def __init__(

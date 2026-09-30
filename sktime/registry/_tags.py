@@ -2425,6 +2425,12 @@ ESTIMATOR_TAG_REGISTER = [
         "can the classifier set n_jobs to use multiple threads?",
     ),
     (
+        "capability:lazy_panel",
+        "classifier",
+        "bool",
+        "can the classifier fit/predict on lazily loaded X, read in batches?",
+    ),
+    (
         "classifier_type",
         "classifier",
         (
